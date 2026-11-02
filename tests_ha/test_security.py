@@ -269,7 +269,7 @@ async def test_legacy_mealie_options_migrate_and_secrets_stay_on_the_server(hass
         assert SECRET_TOKEN not in dumped and SECRET_HOST not in dumped
         assert diagnostics["entry"]["data"]["mealie_api_token"] == "**REDACTED**"
         assert diagnostics["entry"]["data"]["mealie_url"] == "**REDACTED**"
-        assert diagnostics["database"]["schema_version"] == 5
+        assert diagnostics["database"]["schema_version"] == 6
         private = [plan for plan in diagnostics["plans"] if plan["is_private"]]
         assert private and all(plan["name"] == "**REDACTED**" for plan in private)
 

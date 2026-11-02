@@ -536,6 +536,17 @@ CREATE INDEX IF NOT EXISTS idx_hoard_deals_item ON hoard_deals(item_id, found_at
 """
 
 
+# 1.5: phone reminders on tasks, and wishlist categories (one level under an occasion section).
+SCHEMA_V6 = """
+ALTER TABLE tasks ADD COLUMN remind_target TEXT;
+ALTER TABLE tasks ADD COLUMN remind_time TEXT;
+ALTER TABLE tasks ADD COLUMN reminded_for TEXT;
+CREATE INDEX IF NOT EXISTS idx_tasks_remind ON tasks(remind_target) WHERE remind_target IS NOT NULL;
+ALTER TABLE hoard_sections ADD COLUMN parent_id TEXT REFERENCES hoard_sections(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_hoard_sections_parent ON hoard_sections(parent_id);
+"""
+
+
 async def _migrate_v3_data(conn: aiosqlite.Connection) -> None:
     """Move 1.1 "home maintenance" list items into the asset model.
 
@@ -655,6 +666,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     (SCHEMA_V3, _migrate_v3_data),
     (SCHEMA_V4, None),
     (SCHEMA_V5, None),
+    (SCHEMA_V6, None),
 )
 # The first schema that portable backups (backup_manager.py) were written with.
 PORTABLE_MIN_SCHEMA = 4
@@ -742,7 +754,8 @@ TASKS = _Table(
         "status_before_block", "expires_at", "link_url", "source", "source_ref",
         "sensor_entity_id", "sensor_mode", "sensor_threshold", "sensor_baseline",
         "streak", "external_id", "sync_hash", "synced_at", "extra", "created_at",
-        "updated_at", "section_id", "trip_id", "is_repeatable",
+        "updated_at", "section_id", "trip_id", "is_repeatable", "remind_target", "remind_time",
+        "reminded_for",
     ),
     json_fields=("context_tags", "assigned_to", "extra"),
     bool_fields=("shift_aware", "hide_when_blocked", "is_repeatable"),
@@ -875,6 +888,7 @@ HSECTIONS = _Table(
     (
         "id", "plan_id", "kind", "name", "icon", "budget", "event_date", "repeats_yearly", "recipient_name",
         "gift_for_person_id", "stealth_mode", "position", "created_by", "created_by_name", "created_at", "updated_at",
+        "parent_id",
     ),
     bool_fields=("repeats_yearly", "stealth_mode"),
 )
@@ -1741,6 +1755,16 @@ class TaskDragonDB:
         rows = await self._fetchall(
             "SELECT * FROM tasks WHERE status = 'completed' AND recurrence_mode != 'none' "
             "AND due_date IS NOT NULL AND due_date <= ?",
+            (today_iso,),
+        )
+        return [TASKS.decode(row) for row in rows]
+
+    async def reminder_candidates(self, today_iso: str) -> list[dict[str, Any]]:
+        """Open top-level tasks with a phone reminder whose due date has come and that weren't reminded for it."""
+        rows = await self._fetchall(
+            "SELECT * FROM tasks WHERE remind_target IS NOT NULL AND parent_uid IS NULL "
+            "AND status IN ('needs_action', 'in_process') AND due_date IS NOT NULL AND due_date <= ? "
+            "AND (reminded_for IS NULL OR reminded_for != due_date)",
             (today_iso,),
         )
         return [TASKS.decode(row) for row in rows]

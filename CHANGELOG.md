@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0 (2026-11-01)
+
+- **Phone reminders on tasks.** The task editor has a **Phone reminder** field. It lists the phones and tablets that have the Home Assistant companion app, plus "whoever it's assigned to". The reminder goes out on the due date at the time you pick, or at the due time, and again every time the task repeats. Each notification has **Done** and **Snooze 60 min** buttons that act as the person whose phone it was. Administrators can also pick any other `notify.*` service. A reminder set after its time waits for the next occurrence. One that Home Assistant couldn't send on time is dropped once it's more than six hours late.
+- **Swipe away tasks.** On a phone, swipe a task right to tick it off (or un-tick it), and left to clear it off the list (deleting asks first for repeating tasks). Finished one-off tasks also get a **Clear** button. Both have Undo.
+- **Wishlist categories.** An occasion can hold categories, one per person or group: Christmas → Ellie, Grandma, Stocking stuffers. Each category has its own budget, recipient and secret setting, and shares its occasion's date and countdown. The occasion's budget bar counts everything inside it. A category for a household member is hidden from that person, along with everything in it. Everything in a gift occasion's categories counts as a gift, so wall tablets cover it. Deleting a category moves its items up to the occasion.
+- **A quieter header.** Search is now a magnifier button in the header instead of a permanent row; Escape closes it. On the wishlist, the Brain Dump bar is hidden and the second scan button is gone. Adding an idea and **Price check** share one row, and the tracker settings moved to the ⋮ menu.
+- Making a starter section (Want to Buy, Christmas, Birthdays) secret now hides it from everyone else. It used to have no owner, so the setting had no effect. Whoever makes it secret becomes its owner.
+- A **Support on Ko-fi** link in the README and on GitHub.
+- Database schema 6: reminder columns on tasks, `parent_id` on wishlist sections. Older backups restore as before.
+
 ## 1.4.1 (2026-10-31)
 
 Fixes from a security review. Nothing was exploitable without being signed in to Home Assistant, and none of it was Critical or High.

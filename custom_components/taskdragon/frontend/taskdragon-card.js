@@ -14,7 +14,7 @@
  * inject markup or script into the dashboard.
  */
 
-const TD_VERSION = "1.4.1";
+const TD_VERSION = "1.5.0";
 
 /* The TaskDragon emblem (an ouroboros dragon) as a Home Assistant icon set, so
  * `taskdragon:dragon` works in the sidebar, in <ha-icon> and in this card. */
@@ -912,9 +912,19 @@ const HOARD_REVEAL_MS = 120000; // a kiosk re-hides secret gifts after two minut
 
 const HOARD_STYLES = `
 .hoard { display: flex; flex-direction: column; gap: 10px; }
-.htools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
-.htools .hscan { background: var(--td-accent); color: var(--text-primary-color, #fff); border: none; border-radius: 22px; padding: 8px 16px; min-height: 44px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
-.htools .hadd { flex: 1 1 220px; display: flex; gap: 6px; min-width: 0; }
+.htools { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.htools .hscan { background: var(--td-accent); color: var(--text-primary-color, #fff); border: none; border-radius: 22px; padding: 8px 14px; min-height: 44px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: 0 0 auto; }
+.htools .hadd { flex: 1 1 auto; display: flex; gap: 4px; min-width: 0; align-items: center; }
+@media (max-width: 360px) { .htools .hscan span { display: none; } .htools .hscan { padding: 8px 12px; } }
+.hcat { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: var(--td-radius); border: 1px solid var(--td-divider); background: color-mix(in srgb, var(--td-accent) 4%, var(--td-bg)); }
+.hcat-head { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
+.hcat-head > ha-icon { --mdc-icon-size: 20px; color: var(--td-accent); }
+.hcat-head .name { font-weight: 700; font-size: 1rem; }
+.hcat-head .n { font-size: .75rem; color: var(--td-muted); background: var(--td-surface); border-radius: 10px; padding: 0 8px; }
+.hcat-head .grow { flex: 1; }
+.hcat-budget { font-size: .8rem; color: var(--td-muted); }
+.hcat-budget.over { color: var(--td-danger); font-weight: 600; }
+.hcat-add { align-self: flex-start; }
 .htools .hadd input { flex: 1; min-width: 0; border-radius: 22px; padding-left: 14px; background: var(--td-surface); border-color: transparent; min-height: 44px; }
 .hpills { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: thin; }
 .hpills .chip { flex: 0 0 auto; }
@@ -1096,11 +1106,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--td-accent);
 .tab { background: none; border: none; padding: 10px 12px; border-radius: 8px 8px 0 0; white-space: nowrap; color: var(--td-muted); display: inline-flex; gap: 6px; align-items: center; border-bottom: 3px solid transparent; }
 .tab.on { color: var(--td-accent); border-bottom-color: var(--td-accent); font-weight: 600; }
 .tab .count { background: var(--td-surface); border-radius: 10px; padding: 0 7px; font-size: .75rem; color: var(--td-muted); }
-.td-filters { display: flex; padding: 0 16px 6px; justify-content: flex-end; }
+.td-filters { display: flex; padding: 0 16px 6px; }
 .chip { border: 1px solid var(--td-divider); background: var(--td-bg); border-radius: 16px; padding: 4px 12px; font-size: .85rem; min-height: 32px; display: inline-flex; align-items: center; gap: 4px; }
 .chip.on { background: var(--td-accent); border-color: var(--td-accent); color: var(--text-primary-color, #fff); }
 .chip.ghost { border-style: dashed; color: var(--td-muted); }
-.td-search { flex: 1 1 auto; max-width: 320px; min-width: 0; border-radius: 18px; min-height: 36px; padding: 6px 14px; }
+.td-search { flex: 1 1 auto; min-width: 0; border-radius: 18px; min-height: 40px; padding: 6px 14px; }
 .td-body { padding: 4px 12px 16px; flex: 1 1 auto; }
 .empty { color: var(--td-muted); text-align: center; padding: 28px 12px; font-size: .95rem; }
 .empty.sm { padding: 10px 8px; font-size: .85rem; }
@@ -1118,6 +1128,18 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--td-accent);
 .task-row.drop-after { box-shadow: inset 0 -3px 0 var(--td-accent); }
 .task-row.done .summary { text-decoration: line-through; color: var(--td-muted); }
 .task-row.blocked { opacity: .7; }
+.task-row { touch-action: pan-y; }
+.task-row.swiping > *, .task-row.swipe-settle > * { transform: translateX(var(--swipe, 0px)); }
+.task-row.swipe-settle > * { transition: transform .18s ease-out; }
+.task-row.swipe-right { background: linear-gradient(to right, var(--td-ok) var(--swipe-abs, 0px), transparent var(--swipe-abs, 0px)); }
+.task-row.swipe-left { background: linear-gradient(to left, var(--td-danger) var(--swipe-abs, 0px), transparent var(--swipe-abs, 0px)); }
+.task-row.swipe-right::before, .task-row.swipe-left::before { content: attr(data-swipe-label); position: absolute; top: 50%; transform: translateY(-50%); color: #fff; font-weight: 600; font-size: .85rem; pointer-events: none; white-space: nowrap; }
+.task-row.swipe-right::before { left: 14px; }
+.task-row.swipe-left::before { right: 14px; }
+.task-row.swipe-armed::before { font-size: .95rem; }
+.icon-btn.on { color: var(--td-accent); background: color-mix(in srgb, var(--td-accent) 12%, transparent); }
+.remind-row { display: grid; grid-template-columns: minmax(0, 1fr) 124px; gap: 10px; align-items: end; }
+.remind-hint { margin-top: -4px; }
 .handle { cursor: grab; color: var(--td-muted); touch-action: none; width: 22px; height: 36px; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; padding: 0; opacity: .5; flex: 0 0 auto; }
 .task-row:hover .handle { opacity: 1; }
 .check { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--td-muted); background: none; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; margin-top: 4px; padding: 0; }
@@ -1363,6 +1385,8 @@ class TaskDragonCard extends HTMLElement {
     this._onPointerDown = this._onPointerDown.bind(this);
     this._onPointerMove = this._onPointerMove.bind(this);
     this._onPointerUp = this._onPointerUp.bind(this);
+    this._onSwipeMove = this._onSwipeMove.bind(this);
+    this._onSwipeEnd = this._onSwipeEnd.bind(this);
     this._onViewport = () => this._placeMenus(this.shadowRoot);
   }
 
@@ -1457,6 +1481,7 @@ class TaskDragonCard extends HTMLElement {
       if (this._idx.plans.get(tab)?.archetype === "wishlist_hoard" && this._hData(tab)) this._queueHoardLoad(tab);
       this._mDeepLink();
       this._hDeepLink();
+      this._tDeepLink();
     });
   }
 
@@ -1672,8 +1697,8 @@ class TaskDragonCard extends HTMLElement {
           <button class="icon-btn mic" data-action="brain-mic" title="Speak"><ha-icon icon="mdi:microphone"></ha-icon></button>
           <button class="icon-btn send" data-action="brain-send" title="Add"><ha-icon icon="mdi:send"></ha-icon></button>
         </div>
-        <div class="td-filters">
-          <input class="td-search" type="search" placeholder="Search" aria-label="Search tasks">
+        <div class="td-filters" hidden>
+          <input class="td-search" type="search" placeholder="Search this list" aria-label="Search" enterkeyhint="search">
         </div>
         <div class="td-body"></div>
         <div class="td-bulkbar" hidden></div>
@@ -1713,6 +1738,8 @@ class TaskDragonCard extends HTMLElement {
     const root = this.shadowRoot;
     const tab = this._currentTab();
     const title = this._config.title ?? (this._config.plan ? this._visiblePlans()[0]?.name || "TaskDragon" : "TaskDragon");
+    const hoardTab = this._idx.plans.get(tab)?.archetype === "wishlist_hoard";
+    const searching = !!(this._ui.searchOpen || this._ui.search);
     const people = this._board.people || [];
     const peopleHtml = people.map((p) => {
       const on = this._ui.people.size ? this._ui.people.has(p.entity_id) : tab === "myday" ? p.entity_id === this._me() : true;
@@ -1729,12 +1756,15 @@ class TaskDragonCard extends HTMLElement {
         <div class="td-hrow">
           ${this._config.plan ? html`<span class="td-pick"></span>` : this._planPickerHtml(tab)}
           <div class="td-people">${peopleHtml}</div>
-          <button class="icon-btn" data-action="s-open" data-context="auto" title="Scan a barcode" aria-label="Scan a barcode"><ha-icon icon="mdi:barcode-scan"></ha-icon></button>
+          <button class="icon-btn ${searching ? "on" : ""}" data-action="search-toggle" title="Search" aria-label="Search" aria-expanded="${searching ? "true" : "false"}"><ha-icon icon="mdi:magnify"></ha-icon></button>
+          ${hoardTab ? "" : html`<button class="icon-btn" data-action="s-open" data-context="auto" title="Scan a barcode" aria-label="Scan a barcode"><ha-icon icon="mdi:barcode-scan"></ha-icon></button>`}
           <button class="icon-btn" data-action="menu" title="More" aria-label="More"><ha-icon icon="mdi:dots-vertical"></ha-icon></button>
           ${this._ui.menu ? this._menuHtml() : ""}
         </div>`,
     );
     this._placeMenus(root.querySelector(".td-header"));
+    root.querySelector(".td-brain").hidden = !this._config.show_brain_dump || hoardTab;
+    root.querySelector(".td-filters").hidden = !searching;
   }
 
   /** Open (not done, not snoozed) items for a category, or null where a count means nothing. */
@@ -1819,6 +1849,7 @@ class TaskDragonCard extends HTMLElement {
     return html`<div class="menu">
       <button data-action="bulk-mode"><ha-icon icon="mdi:checkbox-multiple-marked-outline"></ha-icon>${this._ui.bulk ? "Exit bulk edit" : "Bulk edit"}</button>
       ${plan ? html`<button data-action="plan-edit" data-id="${plan.id}"><ha-icon icon="mdi:cog-outline"></ha-icon>Category settings</button>` : ""}
+      ${plan?.archetype === "wishlist_hoard" ? html`<button data-action="h-settings"><ha-icon icon="mdi:tune-variant"></ha-icon>Price tracker settings</button>` : ""}
       <button data-action="plan-new"><ha-icon icon="mdi:playlist-plus"></ha-icon>New category / plan</button>
       <button data-action="categories"><ha-icon icon="mdi:eye-settings-outline"></ha-icon>Manage categories / hidden</button>
       ${this._board.mealie?.enabled ? html`<button data-action="mealie-sync"><ha-icon icon="mdi:sync"></ha-icon>Sync Mealie now</button>` : ""}
@@ -2000,7 +2031,9 @@ class TaskDragonCard extends HTMLElement {
         ${promote && !done ? html`<button class="icon-btn" data-action="promote" data-id="${task.uid}" title="Move / promote to a plan" aria-label="Move or promote"><ha-icon icon="mdi:arrow-right-bold-circle-outline"></ha-icon></button>` : ""}
         ${task.status === "snoozed"
           ? html`<button class="icon-btn" data-action="unsnooze" data-id="${task.uid}" title="Wake up" aria-label="Wake up"><ha-icon icon="mdi:alarm-off"></ha-icon></button>`
-          : done ? "" : html`<button class="icon-btn" data-action="snooze" data-id="${task.uid}" title="Snooze" aria-label="Snooze"><ha-icon icon="mdi:sleep"></ha-icon></button>`}
+          : done
+            ? task.recurrence_mode === "none" && !task.parent_uid ? html`<button class="icon-btn" data-action="clear-one" data-id="${task.uid}" title="Clear it off the list" aria-label="Clear it off the list"><ha-icon icon="mdi:close-circle-outline"></ha-icon></button>` : ""
+            : html`<button class="icon-btn" data-action="snooze" data-id="${task.uid}" title="Snooze" aria-label="Snooze"><ha-icon icon="mdi:sleep"></ha-icon></button>`}
         <button class="icon-btn" data-action="open" data-id="${task.uid}" title="Edit" aria-label="Edit"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
       </div>
     </div>`;
@@ -2039,6 +2072,10 @@ class TaskDragonCard extends HTMLElement {
       out.push(html`<span class="badge ok"><ha-icon icon="mdi:calendar-refresh"></ha-icon>Next ${diff === 1 ? "tomorrow" : diff < 7 ? weekdayShort(task.due_date) : monthDay(task.due_date)}</span>`);
     }
     if (task.recurrence_label) out.push(html`<span class="badge"><ha-icon icon="mdi:repeat"></ha-icon>${task.recurrence_label}</span>`);
+    if (task.remind_target && task.status !== "completed") {
+      const where = this._reminderLabel(task.remind_target);
+      out.push(html`<span class="badge" title="Reminder: ${where}"><ha-icon icon="mdi:bell-ring-outline"></ha-icon>${this._reminderClock(task)}</span>`);
+    }
     if (task.streak > 1) out.push(html`<span class="badge streak">🔥 ${task.streak}</span>`);
     if (task.status === "blocked") {
       const names = (task.open_blockers || []).map((b) => b.summary).join(", ");
@@ -2054,6 +2091,20 @@ class TaskDragonCard extends HTMLElement {
     if (slug) out.push(html`<button class="badge" data-action="c-open" data-slug="${slug}" data-name="${task.summary}" data-stop title="Open the cooking view"><ha-icon icon="mdi:chef-hat"></ha-icon>Cook view</button>`);
     if (link) out.push(html`<a class="badge" href="${link}" target="_blank" rel="noopener noreferrer" data-stop><ha-icon icon="mdi:open-in-new"></ha-icon>Recipe</a>`);
     return html`${out}`;
+  }
+
+  /** Where a reminder goes, in words. */
+  _reminderLabel(target) {
+    if (target === "assigned") return "the assigned person's phone";
+    const known = (this._board.notify_targets || []).find((t) => t.id === target);
+    return known ? known.name : target.replace(/^notify\./, "").replace(/^mobile_app_/, "").replace(/_/g, " ");
+  }
+
+  /** The time a reminder goes out, as the server works it out (see reminders.py). */
+  _reminderClock(task) {
+    if (task.remind_time) return task.remind_time;
+    if (task.due_datetime && localISODate(new Date(task.due_datetime)) === task.due_date) return fmtTime(new Date(task.due_datetime));
+    return { morning: "08:00", afternoon: "13:00", evening: "18:00" }[task.time_of_day_bucket] || "09:00";
   }
 
   _sensorBadge(task) {
@@ -4968,6 +5019,20 @@ class TaskDragonCard extends HTMLElement {
     return (hb?.sections || []).find((s) => s.id === id) || null;
   }
 
+  /** Occasions (top-level sections); categories sit under one of them. */
+  _hTop(hb) {
+    return (hb?.sections || []).filter((s) => !s.parent_id || !this._hSection(hb, s.parent_id));
+  }
+
+  _hChildren(hb, id) {
+    return (hb?.sections || []).filter((s) => s.parent_id === id);
+  }
+
+  /** The section and its categories' ids. */
+  _hFamily(hb, id) {
+    return new Set([id, ...this._hChildren(hb, id).map((c) => c.id)]);
+  }
+
   _hKiosk() {
     return this._mode() === "kiosk_split";
   }
@@ -5003,7 +5068,11 @@ class TaskDragonCard extends HTMLElement {
     const q = (this._ui.search || "").trim().toLowerCase();
     let items = hb.items;
     const ui = this._hUi();
-    if (ui.section !== "all") items = items.filter((i) => (ui.section === "unsorted" ? !i.section_id : i.section_id === ui.section));
+    if (ui.section === "unsorted") items = items.filter((i) => !i.section_id);
+    else if (ui.section !== "all") {
+      const family = this._hFamily(hb, ui.section);
+      items = items.filter((i) => family.has(i.section_id));
+    }
     if (q) items = items.filter((i) => [i.title, i.spec_notes, i.brand, i.model, i.recipient_name].some((v) => String(v || "").toLowerCase().includes(q)));
     const order = Object.fromEntries(HOARD_STATUSES.map(([key], index) => [key, index]));
     return [...items].sort((a, b) => (a.status === "gifted") - (b.status === "gifted") || PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority] || order[a.status] - order[b.status] || a.position - b.position);
@@ -5024,48 +5093,62 @@ class TaskDragonCard extends HTMLElement {
       return html`<div class="empty">Loading the wishlist…</div>`;
     }
     const ui = this._hUi();
-    if (ui.section !== "all" && ui.section !== "unsorted" && !this._hSection(hb, ui.section)) ui.section = "all";
+    const picked = this._hSection(hb, ui.section);
+    if (picked?.parent_id && this._hSection(hb, picked.parent_id)) ui.section = picked.parent_id;
+    else if (ui.section !== "all" && ui.section !== "unsorted" && !picked) ui.section = "all";
     const items = this._hFilteredItems(hb);
     const section = this._hSection(hb, ui.section);
     let body;
     if (ui.section === "all") {
-      const groups = [...hb.sections.map((s) => ({ section: s, items: items.filter((i) => i.section_id === s.id) })), { section: null, items: items.filter((i) => !i.section_id) }];
+      const groups = [
+        ...this._hTop(hb).map((s) => {
+          const family = this._hFamily(hb, s.id);
+          return { section: s, items: items.filter((i) => family.has(i.section_id)) };
+        }),
+        { section: null, items: items.filter((i) => !i.section_id || !this._hSection(hb, i.section_id)) },
+      ];
       const shown = groups.filter((g) => g.items.length || (g.section && hb.hidden.some((h) => h.section_id === g.section.id)));
       body = shown.length
         ? shown.map((g) => html`<div class="hgroup-head"><ha-icon icon="${g.section?.icon || "mdi:tray"}"></ha-icon><span>${g.section ? g.section.name : "Unsorted"}</span>${g.section?.days_left !== null && g.section?.days_left !== undefined ? html`<span class="badge">${this._hCountdown(g.section)}</span>` : ""}<span class="grow"></span></div>
             ${this._hHiddenHtml(hb, g.section ? g.section.id : null)}
-            <div class="hgrid">${g.items.map((item) => this._hCardHtml(hb, item))}</div>`)
+            ${g.section ? this._hCategoriesHtml(hb, g.section, g.items, false) : html`<div class="hgrid">${g.items.map((item) => this._hCardHtml(hb, item))}</div>`}`)
         : html`<div class="empty">${this._ui.search ? "Nothing matches your search." : "Nothing here yet — add an idea like “4k monitor”, or scan a barcode in a store."}</div>`;
+    } else if (section) {
+      body = html`${this._hBudgetHtml(hb, section)}${this._hHiddenHtml(hb, section.id)}${this._hCategoriesHtml(hb, section, items, true)}`;
     } else {
-      body = html`${section ? this._hBudgetHtml(hb, section) : ""}${this._hHiddenHtml(hb, ui.section === "unsorted" ? null : ui.section)}
-        ${items.length ? html`<div class="hgrid">${items.map((item) => this._hCardHtml(hb, item))}</div>` : html`<div class="empty">${this._ui.search ? "Nothing matches your search." : "No items in this section yet."}</div>`}`;
+      body = html`${this._hHiddenHtml(hb, null)}
+        ${items.length ? html`<div class="hgrid">${items.map((item) => this._hCardHtml(hb, item))}</div>` : html`<div class="empty">${this._ui.search ? "Nothing matches your search." : "Nothing unsorted."}</div>`}`;
     }
     return html`<div class="hoard">${this._hToolbarHtml(hb, plan)}${this._hPillsHtml(hb)}${ui.section === "all" ? this._hHiddenHtml(hb, null, true) : ""}${body}</div>`;
   }
 
+  /** One row: add an idea (Enter, or + for the full form) and the in-store price check. Settings live in the ⋮ menu. */
   _hToolbarHtml(hb, plan) {
     const ui = this._hUi();
     const kiosk = this._hKiosk();
+    const section = this._hSection(hb, ui.section);
     return html`<div class="htools">
-      <button class="hscan" data-action="h-scan" data-plan="${plan.id}"><ha-icon icon="mdi:barcode-scan"></ha-icon>In-store scan & price check</button>
-      <div class="hadd"><input data-hoard-input="${plan.id}" data-focus="hoard-add-${plan.id}" maxlength="200" placeholder="+ Add an idea, e.g. 4k monitor" enterkeyhint="done" aria-label="Add an idea">
+      <div class="hadd"><input data-hoard-input="${plan.id}" data-focus="hoard-add-${plan.id}" maxlength="200" placeholder="${section ? `Add to ${section.name}…` : "Add an idea… e.g. 4k monitor"}" enterkeyhint="done" aria-label="Add an idea">
         <button class="icon-btn" data-action="h-add" data-plan="${plan.id}" title="Add with details" aria-label="Add with details"><ha-icon icon="mdi:plus"></ha-icon></button></div>
-      ${kiosk ? html`<button class="chip ${ui.revealAll ? "on" : ""}" data-action="h-reveal-all"><ha-icon icon="${ui.revealAll ? "mdi:lock-open-variant-outline" : "mdi:lock-outline"}"></ha-icon>${ui.revealAll ? "Hide secret gifts" : "Show secret gifts"}</button>` : ""}
-      <button class="icon-btn" data-action="h-settings" title="Price tracker settings" aria-label="Price tracker settings"><ha-icon icon="mdi:cog-outline"></ha-icon></button>
-    </div>`;
+      <button class="hscan" data-action="h-scan" data-plan="${plan.id}" title="In-store scan & price check" aria-label="In-store scan and price check"><ha-icon icon="mdi:barcode-scan"></ha-icon><span>Price check</span></button>
+    </div>
+    ${kiosk ? html`<div><button class="chip ${ui.revealAll ? "on" : ""}" data-action="h-reveal-all"><ha-icon icon="${ui.revealAll ? "mdi:lock-open-variant-outline" : "mdi:lock-outline"}"></ha-icon>${ui.revealAll ? "Hide secret gifts" : "Show secret gifts"}</button></div>` : ""}`;
   }
 
   _hPillsHtml(hb) {
     const ui = this._hUi();
-    const count = (id) => hb.items.filter((i) => i.section_id === id && i.status !== "gifted").length;
+    const count = (id) => {
+      const family = this._hFamily(hb, id);
+      return hb.items.filter((i) => family.has(i.section_id) && i.status !== "gifted").length;
+    };
     const unsorted = hb.items.filter((i) => !i.section_id).length;
     return html`<div class="hpills" role="tablist" aria-label="Sections">
       <button class="chip ${ui.section === "all" ? "on" : ""}" data-action="h-section" data-id="all" role="tab" aria-selected="${ui.section === "all" ? "true" : "false"}">All <span class="n">${hb.items.length}</span></button>
-      ${hb.sections.map(
+      ${this._hTop(hb).map(
         (s) => html`<button class="chip ${ui.section === s.id ? "on" : ""}" data-action="h-section" data-id="${s.id}" role="tab" aria-selected="${ui.section === s.id ? "true" : "false"}"><ha-icon icon="${s.icon || "mdi:tag-outline"}"></ha-icon>${s.name}${s.stealth_mode ? html` <ha-icon icon="mdi:incognito"></ha-icon>` : ""} <span class="n">${count(s.id)}</span></button>`,
       )}
       ${unsorted ? html`<button class="chip ${ui.section === "unsorted" ? "on" : ""}" data-action="h-section" data-id="unsorted">Unsorted <span class="n">${unsorted}</span></button>` : ""}
-      <button class="chip ghost" data-action="h-new-section"><ha-icon icon="mdi:plus"></ha-icon>New occasion section</button>
+      <button class="chip ghost" data-action="h-new-section"><ha-icon icon="mdi:plus"></ha-icon>New section</button>
     </div>`;
   }
 
@@ -5101,6 +5184,41 @@ class TaskDragonCard extends HTMLElement {
         <button class="link" data-action="h-edit-section" data-id="${section.id}">Edit section</button>
       </div>
     </div>`;
+  }
+
+  /** An occasion's items: its own first, then a block per category (Christmas → Ellie, Grandma, Stocking stuffers). */
+  _hCategoriesHtml(hb, section, items, full) {
+    const kids = this._hChildren(hb, section.id);
+    const own = items.filter((i) => i.section_id === section.id);
+    const searching = !!(this._ui.search || "").trim();
+    const cards = (list) => html`<div class="hgrid">${list.map((item) => this._hCardHtml(hb, item))}</div>`;
+    const blocks = [];
+    if (own.length) blocks.push(cards(own));
+    else if (full && !kids.length) blocks.push(html`<div class="empty">${searching ? "Nothing matches your search." : "No items in this section yet."}</div>`);
+    for (const kid of kids) {
+      const list = items.filter((i) => i.section_id === kid.id);
+      if (!list.length && (!full || searching)) continue;
+      const who = kid.gift_for_person_id ? this._person(kid.gift_for_person_id).name : kid.recipient_name;
+      const spent = kid.summary?.spent || 0;
+      const icon = kid.gift_for_person_id || kid.recipient_name || section.is_gift ? "mdi:account-heart-outline" : kid.icon || "mdi:tag-outline";
+      blocks.push(html`<div class="hcat">
+        <div class="hcat-head">
+          <ha-icon icon="${icon}"></ha-icon><span class="name">${kid.name}</span>
+          ${who && who !== kid.name ? html`<span class="badge"><ha-icon icon="mdi:gift-outline"></ha-icon>For ${who}</span>` : ""}
+          ${kid.stealth_mode ? html`<span class="badge" title="Only you can see this"><ha-icon icon="mdi:incognito"></ha-icon>Only you</span>` : ""}
+          <span class="n">${list.length}</span>
+          ${kid.budget ? html`<span class="hcat-budget ${spent > kid.budget ? "over" : ""}">${this._hMoney(spent, hb)} / ${this._hMoney(kid.budget, hb)}</span>` : spent ? html`<span class="hcat-budget">${this._hMoney(spent, hb)} spent</span>` : ""}
+          <span class="grow"></span>
+          <button class="icon-btn sm" data-action="h-add" data-section="${kid.id}" title="Add to ${kid.name}" aria-label="Add to ${kid.name}"><ha-icon icon="mdi:plus"></ha-icon></button>
+          <button class="icon-btn sm" data-action="h-edit-section" data-id="${kid.id}" title="Edit ${kid.name}" aria-label="Edit ${kid.name}"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
+        </div>
+        ${list.length ? cards(list) : html`<div class="empty sm">Nothing for ${kid.name} yet — tap + to add an idea.</div>`}
+      </div>`);
+    }
+    if (full && !searching) {
+      blocks.push(html`<button class="chip ghost hcat-add" data-action="h-new-category" data-id="${section.id}"><ha-icon icon="${section.is_gift ? "mdi:account-plus-outline" : "mdi:folder-plus-outline"}"></ha-icon>${section.is_gift ? `Add a person or list to ${section.name}` : `Add a category to ${section.name}`}</button>`);
+    }
+    return html`${blocks}`;
   }
 
   /** "🐉 2 secret gifts hidden by Sam" — what the server reports instead of items this user may not see. */
@@ -5416,7 +5534,11 @@ class TaskDragonCard extends HTMLElement {
     return html`<h2><span class="grow">${it.id ? "Edit item" : "Add to the wishlist"}</span>${this._closeButton()}</h2>
       <div class="form hform">
         <label class="full">Name<input name="title" value="${it.title}" maxlength="200" placeholder="4k monitor, cordless router, toddler rain boots…" autofocus></label>
-        <label>Section<select name="section_id"><option value="">Unsorted</option>${(hb?.sections || []).map((s) => html`<option value="${s.id}" ${s.id === it.section_id ? html`selected` : ""}>${s.name}</option>`)}</select></label>
+        <label>Section<select name="section_id"><option value="">Unsorted</option>${this._hTop(hb).map(
+          (s) => html`<option value="${s.id}" ${s.id === it.section_id ? html`selected` : ""}>${s.name}</option>${this._hChildren(hb, s.id).map(
+            (c) => html`<option value="${c.id}" ${c.id === it.section_id ? html`selected` : ""}>${s.name} › ${c.name}</option>`,
+          )}`,
+        )}</select></label>
         <label>Status<select name="status">${statuses.map(([k, l]) => html`<option value="${k}" ${k === it.status ? html`selected` : ""}>${l}</option>`)}</select></label>
         <label>Target price<input name="target_price" type="number" min="0" step="0.01" inputmode="decimal" value="${num(it.target_price)}" placeholder="e.g. 300"></label>
         <label>Priority<select name="priority">${PRIORITIES.map((p) => html`<option value="${p}" ${p === it.priority ? html`selected` : ""}>${p}</option>`)}</select></label>
@@ -5567,6 +5689,8 @@ class TaskDragonCard extends HTMLElement {
     const hb = this._hData(d.planId);
     const s = d.section;
     const people = hb?.people || this._board.people || [];
+    const parent = s.parent_id ? this._hSection(hb, s.parent_id) : null;
+    if (parent) return this._hCategoryHtml(d, s, parent, people);
     const gift = s.kind !== "want";
     return html`<h2><span class="grow">${s.id ? "Edit section" : "New occasion section"}</span>${this._closeButton()}</h2>
       <div class="form">
@@ -5588,12 +5712,41 @@ class TaskDragonCard extends HTMLElement {
         <button class="btn" data-action="h-section-save">${s.id ? "Save" : "Create"}</button></div>`;
   }
 
+  /** A category of an occasion: usually a person (Christmas → Ellie), or a group like Stocking stuffers. */
+  _hCategoryHtml(d, s, parent, people) {
+    const gift = parent.is_gift;
+    return html`<h2><span class="grow">${s.id ? `Edit “${s.name}”` : `New ${gift ? "list" : "category"} in ${parent.name}`}</span>${this._closeButton()}</h2>
+      <div class="form">
+        <label class="full">Name<input name="name" value="${s.name || ""}" maxlength="120" placeholder="${gift ? "Ellie, Grandma, Stocking stuffers…" : "Tools, Kitchen, Garden…"}" autofocus></label>
+        ${gift ? html`<label>Household member<select name="gift_for_person_id"><option value="">Someone else / a group</option>${people.map((p) => html`<option value="${p.entity_id}" ${p.entity_id === s.gift_for_person_id ? html`selected` : ""}>${p.name}</option>`)}</select></label>` : ""}
+        <label>Budget<input name="budget" type="number" min="0" step="1" inputmode="decimal" value="${s.budget ?? ""}" placeholder="optional"></label>
+        <label class="inline full"><input type="checkbox" name="stealth_mode" ${s.stealth_mode ? html`checked` : ""}> <ha-icon icon="mdi:incognito"></ha-icon>Secret: only I can see this ${gift ? "list" : "category"}</label>
+      </div>
+      ${gift ? html`<p class="hint" style="margin-top:8px">Pick the household member it's for and they won't see this list or anything in it. Everything here counts as a gift, so wall tablets cover it until someone taps Show.</p>` : ""}
+      <div class="dialog-actions">
+        ${s.id ? html`<button class="btn flat" data-action="h-section-delete" data-id="${s.id}"><ha-icon icon="mdi:delete-outline"></ha-icon>Delete</button>` : ""}
+        <span class="grow"></span>
+        <button class="btn flat" data-action="dialog-close">Cancel</button>
+        <button class="btn" data-action="h-section-save">${s.id ? "Save" : "Add"}</button></div>`;
+  }
+
   async _hSectionSave() {
     const d = this._dialog;
     if (d?.kind !== "hoard-section") return;
     const v = this._hFormValues();
     const name = (v.name || "").trim();
-    if (!name) return this._showToast("Give the section a name");
+    if (!name) return this._showToast(d.section.parent_id ? "Give it a name, like Ellie" : "Give the section a name");
+    if (d.section.parent_id) {
+      const category = { name, budget: v.budget === "" || v.budget === undefined ? null : Number(v.budget), stealth_mode: !!v.stealth_mode };
+      if (v.gift_for_person_id !== undefined) category.gift_for_person_id = v.gift_for_person_id || null;
+      if (d.section.id) category.id = d.section.id;
+      else Object.assign(category, { plan_id: d.planId, parent_id: d.section.parent_id });
+      await this._call({ type: "taskdragon/hoard_save_section", section: category });
+      this._closeDialog();
+      this._hUi().section = d.section.parent_id;
+      await this._loadHoard(d.planId);
+      return;
+    }
     const section = {
       name,
       kind: v.kind,
@@ -5845,6 +5998,11 @@ class TaskDragonCard extends HTMLElement {
         return this._renderBody();
       case "h-new-section":
         return this._openDialog({ kind: "hoard-section", planId, section: { kind: "holiday", icon: "mdi:calendar-star", repeats_yearly: true } });
+      case "h-new-category": {
+        const parent = this._hSection(this._hData(planId), id);
+        if (parent) this._openDialog({ kind: "hoard-section", planId, section: { parent_id: parent.id, kind: parent.kind } });
+        return;
+      }
       case "h-edit-section": {
         const section = this._hSection(this._hData(planId), id);
         if (section) this._openDialog({ kind: "hoard-section", planId, section: { ...section } });
@@ -5853,16 +6011,27 @@ class TaskDragonCard extends HTMLElement {
       case "h-section-save":
         return this._hSectionSave();
       case "h-section-delete": {
-        if (!confirm("Delete this section? Its items move to Unsorted.")) return;
+        const hb = this._hData(planId);
+        const doomed = this._hSection(hb, id);
+        const parent = doomed?.parent_id ? this._hSection(hb, doomed.parent_id) : null;
+        const kids = this._hChildren(hb, id).length;
+        const question = parent
+          ? `Delete “${doomed.name}”? Its items move up to ${parent.name}.`
+          : kids
+            ? `Delete this section and its ${kids} ${kids === 1 ? "category" : "categories"}? Their items move to Unsorted.`
+            : "Delete this section? Its items move to Unsorted.";
+        if (!confirm(question)) return;
         await this._call({ type: "taskdragon/hoard_delete_section", section_id: id });
         this._closeDialog();
-        ui.section = "all";
+        ui.section = parent ? parent.id : "all";
         return this._loadHoard(planId);
       }
       case "h-open":
         return this._hOpenDetail(planId, id, !!el.dataset.focusLink);
-      case "h-add":
-        return this._openDialog({ kind: "hoard-edit", planId: el.dataset.plan || planId, item: this._hNewItem(el.dataset.plan || planId) });
+      case "h-add": {
+        const target = el.dataset.plan || planId;
+        return this._openDialog({ kind: "hoard-edit", planId: target, item: this._hNewItem(target, el.dataset.section ? { section_id: el.dataset.section } : {}) });
+      }
       case "h-edit": {
         const item = this._hItem(planId, id);
         if (item) this._openDialog({ kind: "hoard-edit", planId, item: { ...item } });
@@ -6211,6 +6380,7 @@ class TaskDragonCard extends HTMLElement {
         <label class="rec rec-monthly" ${rec.kind === "monthly" ? "" : html`hidden`}>Day of month<input type="number" min="1" max="31" name="rec_monthday" value="${rec.monthday}"></label>
         <label class="rec rec-rolling" ${rec.kind === "rolling" ? "" : html`hidden`}>Days after completion<input type="number" min="1" name="rec_interval" value="${t.recurrence_interval_days || 90}"></label>
         <label class="rec rec-custom" ${rec.kind === "custom" ? "" : html`hidden`}>RRULE<input name="rec_rule" value="${t.recurrence_rule || ""}" maxlength="400" placeholder="FREQ=WEEKLY;INTERVAL=2;BYDAY=TU"></label>
+        ${isMaint ? "" : this._reminderFieldsHtml(t, people)}
         <label class="inline"><input type="checkbox" name="shift_aware" ${t.shift_aware ? html`checked` : ""}>Shift-aware (assign daily to whoever is off work)</label>
         ${isMaint
           ? html`<div class="full banner"><ha-icon icon="mdi:tools"></ha-icon>This becomes a task on the “General” object. Open the maintenance tab for intervals, sensor triggers, parts and NFC.</div>`
@@ -6235,6 +6405,30 @@ class TaskDragonCard extends HTMLElement {
         <button type="button" class="btn" data-action="dialog-save">${d.promoting ? "Save & move" : "Save"}</button>
       </div>
     </form>`;
+  }
+
+  /** "Remind: [phone] at [time]" for the task dialog; phones come from Home Assistant's companion apps. */
+  _reminderFieldsHtml(t, people) {
+    const targets = this._board.notify_targets || [];
+    const phones = targets.filter((x) => x.kind === "phone");
+    const others = targets.filter((x) => x.kind !== "phone");
+    const owner = (x) => x.people.map((p) => people.find((q) => q.entity_id === p)?.name).filter(Boolean).join(", ");
+    const current = t.remind_target || "";
+    const missing = current && current !== "assigned" && !targets.some((x) => x.id === current);
+    const placeholder = t.due_datetime ? fmtTime(new Date(t.due_datetime)) : { morning: "08:00", afternoon: "13:00", evening: "18:00" }[t.time_of_day_bucket] || "09:00";
+    return html`<div class="full remind-row">
+        <label>Phone reminder<select name="remind_target" data-remind-target>
+          <option value="" ${current ? "" : html`selected`}>No reminder</option>
+          <option value="assigned" ${current === "assigned" ? html`selected` : ""}>Whoever it's assigned to</option>
+          ${phones.length ? html`<optgroup label="Phones & tablets">${phones.map((x) => html`<option value="${x.id}" ${x.id === current ? html`selected` : ""}>${x.name}${owner(x) ? ` (${owner(x)})` : ""}</option>`)}</optgroup>` : ""}
+          ${others.length ? html`<optgroup label="Other notify services">${others.map((x) => html`<option value="${x.id}" ${x.id === current ? html`selected` : ""}>${x.name}</option>`)}</optgroup>` : ""}
+          ${missing ? html`<option value="${current}" selected>${current} (not found)</option>` : ""}
+        </select></label>
+        <label>At<input type="time" name="remind_time" value="${t.remind_time || ""}" ${current ? "" : html`disabled`} aria-label="Reminder time"></label>
+      </div>
+      <span class="lastdone full remind-hint">${phones.length
+        ? `On the due date at this time (empty: ${placeholder}), and again every time it repeats. The notification has Done and Snooze buttons.`
+        : "No phones found. Install the Home Assistant companion app on a phone and sign in to get reminders here."}</span>`;
   }
 
   _historyHtml(history) {
@@ -7862,6 +8056,20 @@ class TaskDragonCard extends HTMLElement {
         return this._renderBody();
       case "toggle":
         return this._toggleTask(id);
+      case "clear-one":
+        return this._clearTask(id);
+      case "search-toggle": {
+        const open = !!(ui.searchOpen || ui.search);
+        ui.searchOpen = !open;
+        if (open && ui.search) {
+          ui.search = "";
+          this.shadowRoot.querySelector(".td-search").value = "";
+          this._renderBody();
+        }
+        this._renderChrome();
+        if (ui.searchOpen) setTimeout(() => this.shadowRoot.querySelector(".td-search")?.focus(), 30);
+        return;
+      }
       case "claim": {
         await this._call({ type: "taskdragon/claim_task", uid: id });
         return this._showToast("Claimed — it's yours");
@@ -8151,6 +8359,14 @@ class TaskDragonCard extends HTMLElement {
       this._cookAction("c-step", focused);
       return;
     }
+    if (event.key === "Escape" && focused?.classList?.contains("td-search") && !this._dialog) {
+      this._ui.search = "";
+      this._ui.searchOpen = false;
+      focused.value = "";
+      this._renderChrome();
+      this._renderBody();
+      return;
+    }
     if (event.key === "Escape") {
       if (this._ui.planMenu || this._ui.menu) {
         this._ui.planMenu = this._ui.menu = false;
@@ -8238,6 +8454,10 @@ class TaskDragonCard extends HTMLElement {
       this._bulk(el.dataset.bulk, value);
     } else if (el.dataset?.quickSection) {
       this._ui.quickTarget = { ...(this._ui.quickTarget || {}), [el.dataset.quickSection]: el.value };
+    } else if (el.dataset?.remindTarget !== undefined) {
+      // The reminder time only applies once a phone is picked.
+      const time = this.shadowRoot.querySelector('.task-form [name="remind_time"]');
+      if (time) time.disabled = !el.value;
     } else if (el.name === "rec_kind") {
       const form = this.shadowRoot.querySelector(".task-form");
       for (const node of form.querySelectorAll(".rec")) node.hidden = !node.classList.contains(`rec-${el.value}`);
@@ -8268,6 +8488,14 @@ class TaskDragonCard extends HTMLElement {
     }
   }
 
+  /** Take a finished one-off task off the list (undo brings it back). */
+  async _clearTask(uid, label = "Cleared") {
+    const task = this._idx.tasks.get(uid);
+    if (!task) return;
+    const res = await this._call({ type: "taskdragon/delete_tasks", uids: [uid] });
+    this._showToast(`${label}: ${task.summary}`, this._undoWith(res.undo));
+  }
+
   async _toggleRepeat(uid) {
     const task = this._idx.tasks.get(uid);
     if (!task) return;
@@ -8284,6 +8512,24 @@ class TaskDragonCard extends HTMLElement {
 
   _findTrip(id) {
     return (this._board.trips || []).find((t) => t.id === id);
+  }
+
+  /** A reminder's tap opens TaskDragon at ?task=<uid>: show that task. */
+  _tDeepLink() {
+    if (this._tLinked || !this._board || !this.hasAttribute("panel")) return;
+    this._tLinked = true;
+    const params = new URLSearchParams(window.location.search);
+    const uid = params.get("task");
+    if (!uid) return;
+    params.delete("task");
+    const query = params.toString();
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+    const task = this._idx.tasks.get(uid);
+    if (!task) return this._showToast("That task isn't on the list anymore");
+    const plan = this._planOf(task);
+    if (plan?.id && this._idx.plans.has(plan.id) && plan.archetype !== "quick_list") this._ui.tab = plan.id;
+    this._render();
+    this._openTask(uid);
   }
 
   async _openTask(uid, defaults = {}) {
@@ -8353,6 +8599,10 @@ class TaskDragonCard extends HTMLElement {
     if (has("category")) t.category = val("category") || null;
     if (has("section_id")) t.section_id = val("section_id") || null;
     if (has("trip_id")) t.trip_id = val("trip_id") || null;
+    if (has("remind_target")) {
+      t.remind_target = val("remind_target") || null;
+      t.remind_time = t.remind_target ? val("remind_time") || null : null;
+    }
     if (has("is_repeatable")) t.is_repeatable = !!form.querySelector('[name="is_repeatable"]').checked;
     if (has("sensor_entity_id")) {
       t.sensor_entity_id = val("sensor_entity_id") || null;
@@ -8752,7 +9002,10 @@ class TaskDragonCard extends HTMLElement {
     if (event.button !== 0) return;
     const path = event.composedPath();
     const handle = path.find((el) => el.dataset && (el.dataset.drag || el.dataset.dragTile));
-    if (!handle) return;
+    if (!handle) {
+      this._swipeStart(event, path);
+      return;
+    }
     const uid = handle.dataset.drag || handle.dataset.dragTile;
     const row = path.find((el) => el.classList?.contains("task-row"));
     if (!row) return;
@@ -8798,6 +9051,99 @@ class TaskDragonCard extends HTMLElement {
     } else if (zone) {
       zone.classList.add("over");
       drag.target = { zone };
+    }
+  }
+
+  /* ---------------- Swipe a task row: right = done, left = clear / delete ---------------- */
+
+  _swipeStart(event, path) {
+    if (event.pointerType === "mouse" || this._ui.bulk || this._swipe) return;
+    if (path.some((el) => el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.tagName === "A" || el.classList?.contains("dialog"))) return;
+    const row = path.find((el) => el.classList?.contains("task-row"));
+    if (!row?.dataset.uid || !this._idx.tasks.get(row.dataset.uid)) return;
+    this._swipe = { uid: row.dataset.uid, row, startX: event.clientX, startY: event.clientY, dx: 0, active: false, pointerId: event.pointerId };
+    window.addEventListener("pointermove", this._onSwipeMove);
+    window.addEventListener("pointerup", this._onSwipeEnd);
+    window.addEventListener("pointercancel", this._onSwipeEnd);
+  }
+
+  _onSwipeMove(event) {
+    const swipe = this._swipe;
+    if (!swipe || event.pointerId !== swipe.pointerId) return;
+    const dx = event.clientX - swipe.startX;
+    const dy = event.clientY - swipe.startY;
+    if (!swipe.active) {
+      if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) return this._swipeReset(); // scrolling the list
+      if (Math.abs(dx) < 14 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      swipe.active = true;
+      swipe.row.classList.add("swiping");
+    }
+    const task = this._idx.tasks.get(swipe.uid);
+    const width = swipe.row.offsetWidth || 300;
+    // A blocked task can't be ticked: it resists a right swipe.
+    swipe.dx = dx > 0 && task?.status === "blocked" ? Math.min(dx, 24) : Math.max(-width, Math.min(width, dx));
+    const armed = Math.abs(swipe.dx) >= this._swipeThreshold(swipe.row);
+    const done = task?.status === "completed";
+    const label = swipe.dx > 0 ? (done ? "↺ Not done" : "✓ Done") : done && task?.recurrence_mode === "none" ? "Clear ✕" : "Delete 🗑";
+    swipe.row.dataset.swipeLabel = label;
+    swipe.row.classList.toggle("swipe-right", swipe.dx > 0);
+    swipe.row.classList.toggle("swipe-left", swipe.dx < 0);
+    swipe.row.classList.toggle("swipe-armed", armed);
+    swipe.row.style.setProperty("--swipe", `${swipe.dx}px`);
+    swipe.row.style.setProperty("--swipe-abs", `${Math.abs(swipe.dx)}px`);
+  }
+
+  _swipeThreshold(row) {
+    return Math.min(120, (row.offsetWidth || 300) * 0.35);
+  }
+
+  async _onSwipeEnd(event) {
+    const swipe = this._swipe;
+    if (!swipe || (event.pointerId !== undefined && event.pointerId !== swipe.pointerId)) return;
+    const { row, dx, active, uid } = swipe;
+    this._swipeReset(false);
+    if (!active) return;
+    // The click that follows a swipe must not open or tick the row.
+    this._suppressClick = true;
+    setTimeout(() => {
+      this._suppressClick = false;
+    }, 60);
+    const task = this._idx.tasks.get(uid);
+    const commit = event.type === "pointerup" && Math.abs(dx) >= this._swipeThreshold(row) && task && !(dx > 0 && task.status === "blocked");
+    row.classList.add("swipe-settle");
+    row.style.setProperty("--swipe", commit ? `${dx > 0 ? row.offsetWidth : -row.offsetWidth}px` : "0px");
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    const clean = () => {
+      row.classList.remove("swiping", "swipe-settle", "swipe-left", "swipe-right", "swipe-armed");
+      row.style.removeProperty("--swipe");
+      row.style.removeProperty("--swipe-abs");
+      delete row.dataset.swipeLabel;
+    };
+    if (!commit) return clean();
+    if (dx > 0) {
+      clean();
+      return this._toggleTask(uid);
+    }
+    if (task.recurrence_mode !== "none" && !confirm(`Delete “${task.summary}” and all its repeats?`)) return clean();
+    try {
+      await this._clearTask(uid, task.status === "completed" && task.recurrence_mode === "none" ? "Cleared" : "Deleted");
+    } catch (_err) {
+      /* reported by _call; the row slides back */
+    } finally {
+      clean();
+    }
+  }
+
+  _swipeReset(clearRow = true) {
+    const swipe = this._swipe;
+    this._swipe = null;
+    window.removeEventListener("pointermove", this._onSwipeMove);
+    window.removeEventListener("pointerup", this._onSwipeEnd);
+    window.removeEventListener("pointercancel", this._onSwipeEnd);
+    if (clearRow && swipe?.row) {
+      swipe.row.classList.remove("swiping", "swipe-left", "swipe-right", "swipe-armed");
+      swipe.row.style.removeProperty("--swipe");
+      swipe.row.style.removeProperty("--swipe-abs");
     }
   }
 

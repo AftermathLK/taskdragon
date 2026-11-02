@@ -27,7 +27,7 @@ from datetime import date, datetime, time, timedelta, tzinfo
 from typing import Any
 from urllib.parse import urlsplit
 
-from . import dependencies, recurrence
+from . import dependencies, recurrence, reminders
 from .const import (
     AISLE_HARDWARE,
     ARCHETYPE_DAILY,
@@ -210,6 +210,8 @@ class Planner:
         self.undo_handlers: dict[str, Callable[[Any, Actor], Any]] = {}
         self.maintenance: Any = None
         self.hoard: Any = None  # the wishlist & price tracker (hoard.py)
+        # Whether ``actor`` may send reminders to a ``notify.*`` target (wired to Home Assistant by the coordinator).
+        self.reminder_allowed: Callable[[str, Actor], bool] | None = None
         # Find-or-create of the personal quick list runs one at a time (two tabs open at once).
         self._quick_lock = asyncio.Lock()
 
@@ -706,7 +708,7 @@ class Planner:
                     "config": rule["config"],
                     "label": describe_rule(rule["rule_type"], rule["config"]),
                 }
-            for internal in ("sync_hash", "synced_at", "status_before_snooze", "status_before_block", "external_id"):
+            for internal in ("sync_hash", "synced_at", "status_before_snooze", "status_before_block", "external_id", "reminded_for"):
                 task.pop(internal, None)
         visible = set(active_ids)
         trips = await self.db.list_trips(active_ids)
@@ -1095,7 +1097,55 @@ class Planner:
             out["source"] = str(data["source"])
         if "extra" in data and isinstance(data["extra"], Mapping):
             out["extra"] = dict(data["extra"])
+        try:
+            if "remind_target" in data:
+                out["remind_target"] = reminders.clean_target(data["remind_target"])
+            if "remind_time" in data:
+                out["remind_time"] = reminders.clean_time(data["remind_time"])
+        except ValueError as err:
+            raise PlannerError("invalid", str(err)) from err
         return out
+
+    def _check_reminder(self, fields: dict[str, Any], current: Mapping[str, Any] | None, actor: Actor) -> None:
+        """Vet a new reminder target, and start a changed reminder fresh.
+
+        A target only has to pass the check when it changes, so a task whose phone
+        has since been removed can still be edited. When the target, time or due
+        date changes, the reminder may go out again for the current occurrence,
+        unless its time has already gone by.
+        """
+        target = fields.get("remind_target")
+        if target and target != (current or {}).get("remind_target"):
+            if self.reminder_allowed is not None and not self.reminder_allowed(target, actor):
+                raise PlannerError("invalid", "Pick a phone from the list (other notify services need an administrator)")
+        keys = ("remind_target", "remind_time", "due_date", "due_datetime", "time_of_day_bucket")
+        if current is not None and not any(k in fields and fields[k] != current.get(k) for k in keys):
+            return
+        merged = {**(current or {}), **fields}
+        if not merged.get("remind_target"):
+            return
+        fields["reminded_for"] = merged.get("due_date") if reminders.already_past(merged, self.now(), self.tz) else None
+
+    async def due_reminders(self) -> list[dict[str, Any]]:
+        """Tasks whose reminder should go out now. Late ones are marked handled here without being returned."""
+        now = self.now()
+        candidates = await self.db.reminder_candidates(now.astimezone(self.tz).date().isoformat())
+        due: list[dict[str, Any]] = []
+        stale: dict[str, dict[str, Any]] = {}
+        for task in candidates:
+            state = reminders.reminder_state(task, now, self.tz)
+            if state == reminders.SEND:
+                due.append(task)
+            elif state == reminders.STALE:
+                stale[task["uid"]] = {"reminded_for": task["due_date"]}
+        if stale:
+            await self.db.update_tasks(stale, touch=False)
+        for task in due:
+            task["recurrence_label"] = recurrence.describe(task["recurrence_mode"], task["recurrence_rule"], task["recurrence_interval_days"])
+        return due
+
+    async def mark_reminded(self, uid: str, due_date: str | None) -> None:
+        await self.db.update_tasks({uid: {"reminded_for": due_date}}, touch=False)
 
     # ------------------------------------------------------------------
     # Task CRUD
@@ -1162,6 +1212,7 @@ class Planner:
         if plan["archetype"] == ARCHETYPE_SHOPPING and not fields.get("category"):
             fields["category"] = await self._category_for(fields["summary"], plan)
         self._apply_initial_due(fields)
+        self._check_reminder(fields, None, actor)
         blocked_by = list(data.get("blocked_by") or [])
         async with self.db.transaction():
             task = await self.db.tx_create_task(fields)
@@ -1215,6 +1266,7 @@ class Planner:
             fields.setdefault("kanban_column", KANBAN_IN_PROGRESS)
         if "recurrence_mode" in fields or "recurrence_rule" in fields or "recurrence_interval_days" in fields:
             self._apply_initial_due(fields, task)
+        self._check_reminder(fields, task, actor)
         if plan["archetype"] == ARCHETYPE_SHOPPING and fields.get("category") and fields["category"] != task["category"]:
             await self.db.set_history_category(plan["id"], name_key(fields.get("summary") or task["summary"]), fields["category"])
 

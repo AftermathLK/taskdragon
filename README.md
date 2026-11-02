@@ -7,6 +7,7 @@
   <a href="https://www.home-assistant.io/"><img src="https://raw.githubusercontent.com/AftermathLK/taskdragon/main/docs/images/badges/home-assistant.svg" alt="Home Assistant 2024.11 or newer"></a>
   <img src="https://img.shields.io/github/manifest-json/v/AftermathLK/taskdragon?filename=custom_components%2Ftaskdragon%2Fmanifest.json&style=for-the-badge&label=version&color=0A84E0" alt="Version">
   <img src="https://raw.githubusercontent.com/AftermathLK/taskdragon/main/docs/images/badges/no-cloud.svg" alt="No cloud">
+  <a href="https://ko-fi.com/aftermathlk"><img src="https://raw.githubusercontent.com/AftermathLK/taskdragon/main/docs/images/badges/ko-fi.svg" alt="Support TaskDragon on Ko-fi"></a>
 </p>
 
 <p align="center">
@@ -56,12 +57,14 @@ TaskDragon is a Home Assistant custom integration plus a dashboard card and side
 - **Promote** an item into any plan (shopping items get an aisle, packing items go to the next trip), or **Repeat it…** to turn it into a recurring chore.
 - One **category dropdown** in the header shows where you are and how many items are open. Create categories with an icon and a behavior (quick list, chores, shopping grid, Kanban, trip packing, maintenance, pantry), and hide or reorder them per person.
 - **Brain Dump**: type or say *"pick up 2x4s at Menards Saturday morning and add garlic powder to the grocery list"* and it becomes a project task plus a grocery item, using your Assist LLM when there is one and a built-in parser when there isn't.
+- **Swipe** a task right to tick it off and left to clear it away (with Undo), or tap **Clear** on a finished one.
 
 ### Chores, My Day and the family view
 
 <p align="center"><img src="https://raw.githubusercontent.com/AftermathLK/taskdragon/main/docs/images/family.webp" alt="Family split view with a column per person, and My Day on a phone" width="100%"></p>
 
 - **Time-blocked chores** with calendar (RRULE) or rolling recurrence, streaks, and a rollover hour so late-night completions count for today.
+- **Phone reminders**: pick a phone from the list of companion-app devices (or "whoever it's assigned to") and a time. Each occurrence of a repeating chore pings that phone, with **Done** and **Snooze** buttons right on the notification.
 - **My Day** for whoever is signed in, and a **family split** for a wall tablet: a column per person plus the up-for-grabs pool with one-tap **Claim**. "Last done by Sam yesterday at 6:15 PM" on every recurring chore.
 - **Shift-aware chores** go each morning to whoever is off work, based on everyone's work calendar.
 - **Snooze until context**: until a time, next time I'm home, when we're all home, this weekend if it's not raining, or when any entity reaches a state. **Blocking dependencies** keep Task B blocked (and optionally hidden) until Task A is done.
@@ -105,7 +108,7 @@ TaskDragon is a Home Assistant custom integration plus a dashboard card and side
 
 <p align="center"><img src="https://raw.githubusercontent.com/AftermathLK/taskdragon/main/docs/images/wishlist.webp" alt="Wishlist with a concept tag and its deal matches, a product tracked at three stores with a price trend, and the in-store price check saying buy here on a phone" width="100%"></p>
 
-A **Wishlist & Gifts** category for everything that isn't groceries: a personal or household **Want to Buy** list, holidays (Christmas comes ready, with a **$ budget** and a countdown) and **birthdays and events** for a person.
+A **Wishlist & Gifts** category for everything that isn't groceries: a personal or household **Want to Buy** list, holidays (Christmas comes ready, with a **$ budget** and a countdown) and **birthdays and events** for a person. Inside an occasion, keep a **list per person**: Christmas → Ellie, Grandma, Stocking stuffers, each with its own budget, and hidden from the person it's for.
 
 - **Start vague, get specific.** Type "4k monitor" with notes ("27-inch+, IPS or OLED, USB-C PD") and a target price; no link needed. Turn on the **deal radar** and TaskDragon searches Slickdeals and Reddit's deal subreddits for matching posts ("🔥 3 live deal matches found"), each one a tap away from being tracked.
 - **Track one item at many stores.** Paste product pages from Amazon, Best Buy, Walmart, Target, Home Depot, Menards, B&H, Newegg or any shop. Prices and stock are checked every few hours; the card shows the **best current price** in green, the other stores, a **30-day sparkline**, how far below average it is, and the lowest price seen. You get a notification at your **target price** or a **new all-time low**.
@@ -270,6 +273,10 @@ pytest tests_ha       # end-to-end against a real Home Assistant core
 ```
 
 See the [reference](docs/REFERENCE.md#development) for the module map.
+
+## Support
+
+TaskDragon is free and stays that way. If it saves your household some time, you can [buy me a coffee on Ko-fi](https://ko-fi.com/aftermathlk). Bug reports and ideas are just as welcome in the [issues](https://github.com/AftermathLK/taskdragon/issues).
 
 ## Credits
 

@@ -19,6 +19,11 @@ Anti-spoiler privacy is enforced here, on the server, for every read and write:
   Assistant user linked to that person (unless they added it themselves);
 * a *stealth* item or section is visible only to the person who added it.
 
+A section can hold *categories*, one level deep ("Christmas" → "Ellie",
+"Grandma", "Stocking stuffers"). A category shares its occasion's type and date,
+has its own name, budget and recipient, and whatever hides the occasion hides
+its categories too.
+
 Hidden items come back only as anonymous placeholders ("1 secret gift hidden by
 Sam"): their ids, titles, prices and links never reach that user, and every
 command that names one answers ``not_found``. Notifications and bus events
@@ -133,7 +138,11 @@ _EDITABLE_ITEM = (
     "recipient_name", "gift_for_person_id", "stealth_mode", "hiding_spot", "watch_keyword_deals", "deal_query",
     "deal_max_price", "paid_price", "purchase_date", "purchase_store", "protection_days", "impulse_cooldown", "section_id",
 )
-_EDITABLE_SECTION = ("name", "kind", "icon", "budget", "event_date", "repeats_yearly", "recipient_name", "gift_for_person_id", "stealth_mode", "position")
+_EDITABLE_SECTION = (
+    "name", "kind", "icon", "budget", "event_date", "repeats_yearly", "recipient_name", "gift_for_person_id", "stealth_mode", "position",
+    "parent_id",
+)
+MAX_CATEGORIES = 60  # per section
 
 
 def _not_found() -> PlannerError:
@@ -435,14 +444,34 @@ class HoardManager:
             return True
         return False
 
+    def _section_hidden(self, section: Mapping[str, Any] | None, actor: Actor) -> bool:
+        """A section is hidden when it is, or (for a category) when its occasion is."""
+        return self.hidden_from(section, actor) or bool(section and self.hidden_from(section.get("_parent"), actor))
+
     def _item_hidden(self, item: Mapping[str, Any], section: Mapping[str, Any] | None, actor: Actor) -> bool:
-        return self.hidden_from(section, actor) or self.hidden_from(item, actor)
+        return self._section_hidden(section, actor) or self.hidden_from(item, actor)
 
     @staticmethod
     def _secret(item: Mapping[str, Any], section: Mapping[str, Any] | None) -> bool:
-        """A gift (for anyone, signed in or not) or a stealth item: kiosk views mask it, alerts leave its text out."""
+        """A gift (for anyone, signed in or not) or a stealth item: kiosk views mask it, alerts leave its text out.
+
+        Everything in a category of a gift occasion counts as a gift (the category is
+        usually a person: Christmas → Ellie).
+        """
         keys = ("gift_for_person_id", "recipient_name", "stealth_mode")
-        return bool(any(item.get(k) for k in keys) or (section and any(section.get(k) for k in keys)))
+        parent = section.get("_parent") if section else None
+        return bool(
+            any(item.get(k) for k in keys)
+            or (section and any(section.get(k) for k in keys))
+            or (parent and (any(parent.get(k) for k in keys) or parent.get("kind") in HOARD_GIFT_KINDS))
+        )
+
+    async def _load_section(self, section_id: str | None) -> dict[str, Any] | None:
+        """A section row with its occasion attached as ``_parent`` (for categories)."""
+        section = await self.db.row(HSECTIONS, section_id) if section_id else None
+        if section is not None and section.get("parent_id"):
+            section["_parent"] = await self.db.row(HSECTIONS, section["parent_id"])
+        return section
 
     async def _require_plan(self, plan_id: str | None, actor: Actor) -> dict[str, Any]:
         plan = await self.db.get_plan(plan_id) if plan_id else None
@@ -451,8 +480,8 @@ class HoardManager:
         return plan
 
     async def _require_section(self, section_id: str | None, actor: Actor, plan_id: str | None = None) -> dict[str, Any]:
-        section = await self.db.row(HSECTIONS, section_id) if section_id else None
-        if section is None or (plan_id and section["plan_id"] != plan_id) or self.hidden_from(section, actor):
+        section = await self._load_section(section_id)
+        if section is None or (plan_id and section["plan_id"] != plan_id) or self._section_hidden(section, actor):
             raise _not_found()
         await self._require_plan(section["plan_id"], actor)
         return section
@@ -462,7 +491,7 @@ class HoardManager:
         if item is None:
             raise _not_found()
         plan = await self._require_plan(item["plan_id"], actor)
-        section = await self.db.row(HSECTIONS, item["section_id"]) if item["section_id"] else None
+        section = await self._load_section(item["section_id"])
         if self._item_hidden(item, section, actor):
             raise _not_found()
         return item, section, plan
@@ -500,12 +529,18 @@ class HoardManager:
     async def clone_sections(self, source_plan_id: str, target_plan_id: str) -> None:
         """Copy a wishlist's occasion sections (not its items) into a duplicated plan."""
         sections = await self.db.rows(HSECTIONS, {"plan_id": source_plan_id}, order=("position", "created_at"))
+        copied: dict[str, str] = {}
         async with self.db.transaction():
-            for section in sections:
+            # Occasions first, so each category can point at its copy.
+            for section in sorted(sections, key=lambda s: bool(s.get("parent_id"))):
                 if section["stealth_mode"] or section["gift_for_person_id"]:
                     continue  # never copy someone's secret occasion into a plan others can open
+                parent = section.get("parent_id")
+                if parent and parent not in copied:
+                    continue  # its occasion was secret
                 record = {k: section[k] for k in ("kind", "name", "icon", "budget", "event_date", "repeats_yearly", "recipient_name", "position")}
-                await self.db.tx_insert_row(HSECTIONS, {**record, "plan_id": target_plan_id})
+                row = await self.db.tx_insert_row(HSECTIONS, {**record, "plan_id": target_plan_id, "parent_id": copied.get(parent) if parent else None})
+                copied[section["id"]] = row["id"]
         seeded = list(await self.db.get_meta(SEEDED_META, []) or [])
         await self.db.set_meta(SEEDED_META, [*seeded, target_plan_id][-500:])
 
@@ -542,8 +577,36 @@ class HoardManager:
                     out[key] = max(0, int(value))
                 except (TypeError, ValueError) as err:
                     raise PlannerError("invalid", "Positions are whole numbers") from err
+            elif key == "parent_id":
+                out[key] = str(value) if value else None
         self._check_secret_change(out, current, actor)
         return out
+
+    async def _place_category(self, changes: dict[str, Any], current: Mapping[str, Any] | None, plan_id: str, actor: Actor) -> None:
+        """Check a section's occasion (one level deep, same list) and make a category follow it.
+
+        A category takes its occasion's type, and its own date is dropped: the
+        countdown is the occasion's.
+        """
+        parent_id = changes["parent_id"] if "parent_id" in changes else (current or {}).get("parent_id")
+        if not parent_id:
+            return
+        if current is not None and parent_id == current["id"]:
+            raise PlannerError("invalid", "A section can't be its own category")
+        parent = await self._require_section(parent_id, actor, plan_id=plan_id)
+        if parent.get("parent_id"):
+            raise PlannerError("invalid", "Categories go one level deep: pick an occasion, not another category")
+        if current is not None and "parent_id" in changes and await self.db.rows(HSECTIONS, {"parent_id": current["id"]}, limit=1):
+            raise PlannerError("invalid", "This section has its own categories, so it can't become one")
+        if "parent_id" in changes and changes["parent_id"] != (current or {}).get("parent_id"):
+            siblings = await self.db.rows(HSECTIONS, {"parent_id": parent_id})
+            if len(siblings) >= MAX_CATEGORIES:
+                raise PlannerError("invalid", f"A section holds at most {MAX_CATEGORIES} categories")
+            if "position" not in changes:
+                changes["position"] = max((sib["position"] for sib in siblings), default=0) + 1
+        changes["kind"] = parent["kind"]
+        changes["event_date"] = None
+        changes["repeats_yearly"] = False
 
     @staticmethod
     def _check_secret_change(changes: Mapping[str, Any], current: Mapping[str, Any] | None, actor: Actor) -> None:
@@ -558,8 +621,18 @@ class HoardManager:
         if data.get("id"):
             section = await self._require_section(data["id"], actor)
             changes = self._clean_section(data, section, actor)
+            await self._place_category(changes, section, section["plan_id"], actor)
+            if changes.get("stealth_mode") and not section.get("created_by") and actor.user_id:
+                # A starter section has no owner; whoever makes it secret becomes the one who can see it.
+                changes.update(created_by=actor.user_id, created_by_name=actor.user_name)
             if changes:
-                section = await self.db.update_row(HSECTIONS, section["id"], changes) or section
+                updated = await self.db.update_row(HSECTIONS, section["id"], changes)
+                section = await self._load_section(section["id"]) if updated else section
+            if not section.get("parent_id") and any(k in changes for k in ("kind",)):
+                # Categories follow their occasion's type.
+                async with self.db.transaction():
+                    for child in await self.db.rows(HSECTIONS, {"parent_id": section["id"]}):
+                        await self.db.tx_update_row(HSECTIONS, child["id"], {"kind": section["kind"]})
             self._notify([section["plan_id"]])
             return self._section_view(section, [], 0, self._today(), actor)
         plan = await self._require_plan(data.get("plan_id"), actor)
@@ -567,31 +640,46 @@ class HoardManager:
         changes = self._clean_section({"kind": HOARD_KIND_WANT, **data}, None, actor)
         if not changes.get("name"):
             raise PlannerError("invalid", "A section needs a name")
+        await self._place_category(changes, None, plan["id"], actor)
         if "position" not in changes:
             existing = await self.db.rows(HSECTIONS, {"plan_id": plan["id"]})
-            changes["position"] = max((s["position"] for s in existing), default=0) + 1
+            changes["position"] = max((s["position"] for s in existing if not s.get("parent_id")), default=0) + 1
         section = await self.db.insert_row(
             HSECTIONS, {**changes, "plan_id": plan["id"], "created_by": actor.user_id, "created_by_name": actor.user_name}
         )
         self._notify([plan["id"]])
-        return self._section_view(section, [], 0, self._today(), actor)
+        return self._section_view(await self._load_section(section["id"]) or section, [], 0, self._today(), actor)
 
     async def delete_section(self, section_id: str, actor: Actor, *, move_to: str | None = None) -> dict[str, Any]:
-        """Delete a section; its items move to ``move_to`` (or become unsorted)."""
+        """Delete a section and its categories.
+
+        Items move to ``move_to`` if given. Otherwise a category's items move up to
+        its occasion, and an occasion's items (its categories' too) become unsorted.
+        """
         section = await self._require_section(section_id, actor)
+        children = await self.db.rows(HSECTIONS, {"parent_id": section_id})
+        gone = {section_id, *(c["id"] for c in children)}
         target = None
         if move_to:
             target = await self._require_section(move_to, actor, plan_id=section["plan_id"])
-        items = await self.db.rows(HITEMS, {"section_id": section_id})
+            if target["id"] in gone:
+                raise PlannerError("invalid", "Move the items somewhere outside the section you're deleting")
+        elif section.get("parent_id"):
+            target = section.get("_parent")
+        items = [item for sid in gone for item in await self.db.rows(HITEMS, {"section_id": sid})]
         async with self.db.transaction():
             for item in items:
                 await self.db.tx_update_row(HITEMS, item["id"], {"section_id": target["id"] if target else None})
+            for child in children:
+                await self.db.conn.execute("DELETE FROM hoard_sections WHERE id = ?", (child["id"],))
             await self.db.conn.execute("DELETE FROM hoard_sections WHERE id = ?", (section_id,))
         self._notify([section["plan_id"]])
-        return {"moved": len(items), "to": target["id"] if target else None}
+        return {"moved": len(items), "to": target["id"] if target else None, "categories": len(children)}
 
     def _section_view(self, section: Mapping[str, Any], items: Sequence[Mapping[str, Any]], hidden: int, today: date, actor: Actor) -> dict[str, Any]:
-        upcoming = next_occurrence(section.get("event_date"), bool(section.get("repeats_yearly")), today)
+        """A section for the card. An occasion's ``items`` include its categories' items."""
+        occasion = section.get("_parent") or section
+        upcoming = next_occurrence(occasion.get("event_date"), bool(occasion.get("repeats_yearly")), today)
         owned = [i for i in items if i["status"] in HOARD_OWNED_STATUSES]
         spent = round(sum(float(i["paid_price"]) for i in owned if i.get("paid_price") is not None), 2)
         return {
@@ -606,6 +694,7 @@ class HoardManager:
             "gift_for_person_id": section.get("gift_for_person_id"),
             "stealth_mode": bool(section.get("stealth_mode")),
             "position": section.get("position") or 0,
+            "parent_id": section.get("parent_id"),
             "is_gift": section["kind"] in HOARD_GIFT_KINDS,
             "next_date": upcoming.isoformat() if upcoming else None,
             "days_left": (upcoming - today).days if upcoming else None,
@@ -633,16 +722,28 @@ class HoardManager:
         sections = await self.db.rows(HSECTIONS, {"plan_id": plan_id}, order=("position", "created_at"))
         items = await self.db.rows(HITEMS, {"plan_id": plan_id}, order=("position", "created_at"))
         by_id = {s["id"]: s for s in sections}
-        hidden_sections = {s["id"] for s in sections if self.hidden_from(s, actor)}
+        for section in sections:
+            if section.get("parent_id"):
+                section["_parent"] = by_id.get(section["parent_id"])
+        hidden_sections = {s["id"] for s in sections if self._section_hidden(s, actor)}
+
+        def occasion_of(section: Mapping[str, Any]) -> str:
+            return section["parent_id"] if section.get("parent_id") in by_id else section["id"]
+
         visible: list[dict[str, Any]] = []
         placeholders: dict[tuple[str | None, str], int] = defaultdict(int)
         hidden_per_section: dict[str, int] = defaultdict(int)
         for item in items:
             section = by_id.get(item["section_id"]) if item["section_id"] else None
             if section is not None and section["id"] in hidden_sections:
-                placeholders[(None, section.get("created_by_name") or item.get("created_by_name") or "someone")] += 1
+                # A hidden category of a visible occasion is announced under the occasion.
+                occasion = occasion_of(section)
+                key = occasion if occasion not in hidden_sections else None
+                placeholders[(key, section.get("created_by_name") or item.get("created_by_name") or "someone")] += 1
+                if key:
+                    hidden_per_section[key] += 1
             elif self.hidden_from(item, actor):
-                key = item["section_id"] if section is not None else None
+                key = occasion_of(section) if section is not None else None
                 placeholders[(key, item.get("created_by_name") or "someone")] += 1
                 if key:
                     hidden_per_section[key] += 1
@@ -652,8 +753,18 @@ class HoardManager:
         items_by_section: dict[str | None, list[dict[str, Any]]] = defaultdict(list)
         for item in visible:
             items_by_section[item["section_id"] if item["section_id"] in by_id else None].append(item)
+        children: dict[str, list[str]] = defaultdict(list)
+        for section in sections:
+            if section.get("parent_id") in by_id and section["id"] not in hidden_sections:
+                children[section["parent_id"]].append(section["id"])
         section_views = [
-            self._section_view(s, items_by_section.get(s["id"], []), hidden_per_section.get(s["id"], 0), today, actor)
+            self._section_view(
+                s,
+                [*items_by_section.get(s["id"], []), *(i for c in children.get(s["id"], []) for i in items_by_section.get(c, []))],
+                hidden_per_section.get(s["id"], 0),
+                today,
+                actor,
+            )
             for s in sections
             if s["id"] not in hidden_sections
         ]
@@ -810,7 +921,7 @@ class HoardManager:
         }
 
     async def item_view(self, item_id: str, actor: Actor) -> dict[str, Any]:
-        item, section, _plan = await self._require_item(item_id, actor)
+        item, section, _plan = await self._require_item(item_id, actor)  # the section carries its occasion
         settings = await self.settings()
         sections = {section["id"]: section} if section else {}
         return (await self._item_views([item], sections, settings, self._today(), actor))[0]
@@ -923,7 +1034,7 @@ class HoardManager:
     async def _default_section_id(self, plan_id: str, actor: Actor) -> str | None:
         await self.ensure_sections(plan_id)
         for section in await self.db.rows(HSECTIONS, {"plan_id": plan_id}, order=("position", "created_at")):
-            if section["kind"] == HOARD_KIND_WANT and not self.hidden_from(section, actor):
+            if section["kind"] == HOARD_KIND_WANT and not section.get("parent_id") and not self.hidden_from(section, actor):
                 return section["id"]
         return None
 
@@ -1212,7 +1323,7 @@ class HoardManager:
         item = await self.db.row(HITEMS, item_id)
         if item is None:
             return []
-        section = await self.db.row(HSECTIONS, item["section_id"]) if item["section_id"] else None
+        section = await self._load_section(item["section_id"])
         urls = await self.db.rows(HURLS, {"item_id": item_id})
         best = _best_url([{**u, "in_stock": None if u.get("in_stock") is None else bool(u["in_stock"])} for u in urls])
         if best is None:
@@ -1394,7 +1505,7 @@ class HoardManager:
                 continue
             sid = item["section_id"]
             if sid and sid not in sections_cache:
-                sections_cache[sid] = await self.db.row(HSECTIONS, sid)
+                sections_cache[sid] = await self._load_section(sid)
             if not self._item_hidden(item, sections_cache.get(sid) if sid else None, actor):
                 local_rows.append(item)
         local = await self._item_views(local_rows, {k: v for k, v in sections_cache.items() if v}, settings, self._today(), actor)
@@ -1436,6 +1547,10 @@ class HoardManager:
         best = (buyable or online or [None])[0]
         display = display_barcode(code)
         sections = await self.db.rows(HSECTIONS, {"plan_id": plan["id"]}, order=("position", "created_at"))
+        names = {s["id"]: s["name"] for s in sections}
+        for section in sections:
+            if section.get("parent_id"):
+                section["_parent"] = next((x for x in sections if x["id"] == section["parent_id"]), None)
         return {
             "barcode": code,
             "display": display,
@@ -1450,9 +1565,15 @@ class HoardManager:
             "search_links": search_links(display),
             "model_links": search_links(product["model"]) if product and product.get("model") else [],
             "sections": [
-                {"id": s["id"], "name": s["name"], "kind": s["kind"], "gift_for_person_id": s.get("gift_for_person_id")}
-                for s in sections
-                if not self.hidden_from(s, actor)
+                {
+                    "id": s["id"],
+                    "name": f"{names.get(s['parent_id'], '')} › {s['name']}" if s.get("parent_id") else s["name"],
+                    "kind": s["kind"],
+                    "gift_for_person_id": s.get("gift_for_person_id"),
+                    "parent_id": s.get("parent_id"),
+                }
+                for s in sorted(sections, key=lambda x: (x["_parent"]["position"] if x.get("_parent") else x["position"], bool(x.get("parent_id")), x["position"]))
+                if not self._section_hidden(s, actor)
             ],
             "stores": sorted({o["retailer"] for o in online})[:50],
         }

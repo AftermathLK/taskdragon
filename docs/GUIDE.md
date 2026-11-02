@@ -31,6 +31,8 @@ Everyday tips:
 - **Maintenance**: the blue object name opens the object (tasks, documents, parts, full history); the bold task name opens the task (KPIs, timeline, triggers, recommendation, activity). ✔ **Complete** on a row logs it right away with undo; the task page's Complete asks for cost, duration, parts, feedback and a photo.
 - Drag the ⋮ handle to reorder, or to move between Morning/Afternoon/Evening, Kanban columns, aisles, quick-list sections, trips and packing groups, or between people in the family view (dropping on a person's column reassigns the task).
 - Every completion and delete shows a 5-second **Undo**.
+- **Swipe** (on a phone or tablet): swipe a task right to tick it off or un-tick it, and left to clear it away. Short swipes spring back. A repeating task asks before it's deleted, because that deletes the whole series. With a mouse, finished one-off tasks have a **Clear** button (ⓧ) instead; **Clear N completed** at the bottom of a quick list clears them all.
+- **Search** is the magnifier in the header. It filters the current view as you type, and Escape (or the magnifier again) clears and closes it.
 - The ⋮ menu has bulk edit, category settings (sharing, and for administrators routing roles and which Mealie list a shopping plan syncs with), new categories and **Settings & backups** (keep-awake default for this device, the Open Food Facts switch, and backup / restore).
 - The **barcode** button in the header scans any barcode and sends you to the pantry item or part it belongs to (see Barcode scanning below).
 - The mic uses the browser's speech recognition where it's available (Chrome and Android). On iOS, use the keyboard's dictation button or the [voice automation](REFERENCE.md#voice-brain-dump-through-assist).
@@ -44,6 +46,17 @@ Everyday tips:
 - **Rolling**: N days after the day you actually finished it.
 
 Completed recurring tasks stay checked until the rollover hour, then re-open, and their checklists reset with them. Streaks count consecutive on-time completions. Maintenance tasks have their own scheduling, described next.
+
+### Phone reminders
+
+**Phone reminder** in the task editor sends a notification to a phone:
+
+- **Whoever it's assigned to** goes to the phones of the people the task is assigned to, or to the whole household's phones when nobody is. An unassigned task in a private list only goes to the people the list is shared with. A phone belongs to the person linked to the user who signed in to the companion app, and to anyone who uses one of its device trackers.
+- A **specific phone or tablet** comes from the companion apps that have notifications turned on. Administrators can also pick any other `notify.*` service, like a Telegram or Pushover service.
+- **At** is the time on the due date. Leave it empty to use the due time, or the time of day (Morning 08:00, Afternoon 13:00, Evening 18:00, Anytime 09:00). A task needs a due date or a repeat for reminders.
+- A repeating task is reminded once for each occurrence. Completing it early skips that day's reminder. If you set or move a reminder to a time that has already passed today, it starts with the next occurrence.
+- The notification has **Done** and **Snooze 60 min** buttons, which act as whoever owns the phone (and do nothing on a list that person can't see). After a snooze, the reminder comes back when the task wakes up. Tapping the notification opens the task in TaskDragon.
+- If Home Assistant was off at reminder time, the reminder still goes out when it starts, unless it's more than six hours late.
 
 ## Home maintenance & assets
 
@@ -124,16 +137,24 @@ The **Wishlist & Gifts** category (new installations and upgrades get one; add m
 
 ### Sections, budgets and countdowns
 
-The pills along the top switch between **All**, **Want to Buy**, **Christmas**, **Birthdays** and any **New occasion section** you add (Halloween, Easter, Black Friday, Alex's 40th…). A section can have:
+The pills along the top switch between **All**, **Want to Buy**, **Christmas**, **Birthdays** and any **New section** you add (Halloween, Easter, Black Friday, Alex's 40th…). A section can have:
 
 - a **budget**: the bar shows *Spent $420 / $1,000 budget · 6 bought · 3 watching · 2 wrapped* and turns amber near the limit and red over it ("spent" is what you entered as paid for bought items);
 - a **date**, optionally **every year**, for a countdown (*23 days to go*);
 - a person it's **for** (a household member, or any name);
 - **secret**: only you can see the section and everything in it.
 
+**Lists per person (categories).** Open an occasion and tap **Add a person or list to Christmas** to keep a list for each person under the one occasion: *Christmas → Ellie, Grandma, Stocking stuffers*. You don't need a section per person. A category has:
+
+- a **name**, and if it's for someone in the household, that **household member**. They won't see the category or anything in it; they get *🐉 N secret gifts hidden by …* under the occasion instead;
+- its own **budget** (*$34.95 / $120.00* in its header). The occasion's budget bar counts everything in all of its categories;
+- **secret**: only you can see it.
+
+A category uses its occasion's type, date and countdown. Everything in a gift occasion's categories counts as a gift, so wall tablets cover it until someone taps Show. The **+** in a category's header adds an item straight into it. Its pencil renames it or changes its budget, or deletes it; its items then move up to the occasion. Deleting the occasion deletes its categories, and their items become unsorted. Categories go one level deep. In the item editor they appear as *Christmas › Ellie*.
+
 ### Three tiers: concept → tracked product → bought
 
-1. **Concept tag.** Type a name in **+ Add an idea** ("4k monitor", "cordless router", "toddler rain boots"). Open it to add **spec notes**, a **priority** and a **target price**. Turn on **Deal radar** to have TaskDragon search Slickdeals' front-page deals and Reddit's r/buildapcsales and r/deals every few hours. A post matches when every search word is in its title (*monitor* also matches *monitors*) and its price is at most your max price (or the target price). Matches appear on the card as **🔥 N live deal matches found**. **Track this** turns a deal's link into a tracked store; the dismiss button hides one for good.
+1. **Concept tag.** Type a name in **Add an idea** ("4k monitor", "cordless router", "toddler rain boots") and press Enter. While a section is open the field says *Add to Christmas…* and the idea lands there; **+** opens the full form. Open it to add **spec notes**, a **priority** and a **target price**. Turn on **Deal radar** to have TaskDragon search Slickdeals' front-page deals and Reddit's r/buildapcsales and r/deals every few hours. A post matches when every search word is in its title (*monitor* also matches *monitors*) and its price is at most your max price (or the target price). Matches appear on the card as **🔥 N live deal matches found**. **Track this** turns a deal's link into a tracked store; the dismiss button hides one for good.
 2. **Tracked product.** Paste one or more product pages under **Stores** (up to 12). Each page is fetched every few hours (6 by default) with a desktop browser's headers and read in this order:
    1. the page's **schema.org product data** (JSON-LD `Product` / `Offer` / `AggregateOffer`: price, currency, stock);
    2. **product meta tags** (`product:price:amount`, `og:price:amount`, `itemprop="price"`, Twitter labels);
@@ -149,7 +170,7 @@ A price alert goes to a **persistent notification** with a link straight to the 
 
 ### In-store scan & price check
 
-**In-store scan & price check** (or the header's barcode button while the wishlist is open) opens the camera. After a scan:
+**Price check** (next to the add field) opens the camera. After a scan:
 
 - the product's photo, name, brand and model come from **UPCitemdb** (its free tier allows about 100 lookups a day; when that's used up the sheet says so), with Open Food Facts and your own list as fallbacks;
 - **Shelf price you see right now** and **Store you're in**: as you type, the verdict switches between **✅ BUY HERE — Beats lowest online price by $X** and **⚠️ CHEAPER ONLINE — Save $X at [store]**;
@@ -176,7 +197,7 @@ On **Want to Buy** items over the cooldown amount ($100 by default), **7-day imp
 
 ### Tracker settings
 
-The gear on the wishlist toolbar opens **Price tracker** settings (administrators can change them): automatic price checks and how often, default price-protection days, deal radar and how often, UPCitemdb lookups, and the impulse cooldown amount and length. Only page addresses, search words and barcode numbers leave Home Assistant, and addresses on your own network are never fetched.
+**⋮ → Price tracker settings** opens the tracker's settings (administrators can change them): automatic price checks and how often, default price-protection days, deal radar and how often, UPCitemdb lookups, and the impulse cooldown amount and length. Only page addresses, search words and barcode numbers leave Home Assistant, and addresses on your own network are never fetched.
 
 ## Barcode scanning
 

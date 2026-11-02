@@ -347,7 +347,7 @@ async def test_v1_database_migrates_packing_plans_to_trips(tmp_path) -> None:
     db = TaskDragonDB(str(path))
     await db.async_open()
     try:
-        assert await db.schema_version() == 5
+        assert await db.schema_version() == 6
         template = await db.get_plan("tpl")
         assert template["name"] == "Trip Packing" and template["is_template"] is False
         assert (await db.get_task("t1"))["is_repeatable"] is True

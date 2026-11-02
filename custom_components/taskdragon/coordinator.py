@@ -15,6 +15,9 @@ Responsibilities:
 * The wishlist & price tracker (:mod:`.hoard`): store-link price checks and
   deal radar every few hours, price alerts (persistent notification, the
   plan's notify service and the ``taskdragon_price_alert`` event).
+* Phone reminders for tasks (:mod:`.reminders`): sent from the minute tick to
+  companion-app devices, with Done / Snooze buttons answered through the
+  ``mobile_app_notification_action`` event.
 
 The Mealie URL and token come from ``ConfigEntry.data`` and stay inside this
 object and the client; nothing derived from them except recipe links is ever
@@ -26,12 +29,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from collections import defaultdict
+from collections.abc import Mapping
 from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
@@ -41,6 +47,7 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.util import dt as dt_util
+from homeassistant.util import slugify
 
 from .backup_manager import BackupManager
 from .barcode_manager import BarcodeManager
@@ -109,9 +116,10 @@ from .kitchen import build_prep_steps, ingredient_lines, leftover_summary, parse
 from .maintenance_runtime import MaintenanceRuntime
 from .mealie_client import InvalidMealieUrl, MealieAuthError, MealieClient, MealieError, item_hash, item_text
 from .openfoodfacts import OpenFoodFactsClient
-from .planner import SYSTEM, Actor, Planner
+from .planner import SYSTEM, Actor, Planner, PlannerError
 from .price_tracker import GuardedFetcher, ProductLookup
 from .ratelimit import RateLimiter
+from .reminders import REMIND_ASSIGNED, SNOOZE_MINUTES, notification_data, parse_action, reminder_text
 from .recipe_browser import RecipeBrowser
 from .shift_balance import Chore, PersonAvailability, balance_chores, parse_keywords, shifts_for_day
 from .snooze import (
@@ -159,6 +167,7 @@ class TaskDragonCoordinator:
             clock=dt_util.utcnow,
         )
         self.planner.on_cook_completed = self._on_cook_completed
+        self.planner.reminder_allowed = self.reminder_target_allowed
         self.maintenance = MaintenanceRuntime(hass, self)
         self.mealie: MealieClient | None = None
         self.mealie_status: dict[str, Any] = {"enabled": False}
@@ -238,6 +247,7 @@ class TaskDragonCoordinator:
                 self.mealie_status = {"enabled": True, "ok": None, "last_sync": None, "error": None}
 
         self._unsubs.append(async_track_time_change(self.hass, self._minute_tick, second=0))
+        self._unsubs.append(self.hass.bus.async_listen("mobile_app_notification_action", self._on_notification_action))
         shift_at = parse_time(self.options.get(CONF_SHIFT_CHECK_TIME), parse_time(DEFAULT_SHIFT_CHECK_TIME, time(5)))
         self._unsubs.append(
             async_track_time_change(
@@ -363,6 +373,108 @@ class TaskDragonCoordinator:
             person=self.person_for_user(user_id),
             is_admin=bool(user and user.is_admin),
         )
+
+    # ------------------------------------------------------------------
+    # Phone reminders
+    # ------------------------------------------------------------------
+    def phones(self) -> list[dict[str, Any]]:
+        """Companion-app devices that can receive notifications, with the people they belong to.
+
+        A phone belongs to the person linked to the user who registered it, and to
+        any person that uses one of its device trackers.
+        """
+        registry = er.async_get(self.hass)
+        by_entry: dict[str, set[str]] = defaultdict(set)
+        users: dict[str, str] = {}
+        for state in self.hass.states.async_all("person"):
+            if state.attributes.get("user_id"):
+                users[state.attributes["user_id"]] = state.entity_id
+            for tracker in state.attributes.get("device_trackers") or []:
+                entry = registry.async_get(tracker)
+                if entry is not None and entry.config_entry_id:
+                    by_entry[entry.config_entry_id].add(state.entity_id)
+        phones: dict[str, dict[str, Any]] = {}
+        for entry in self.hass.config_entries.async_entries("mobile_app"):
+            name = str(entry.data.get("device_name") or entry.title or "").strip()
+            service = "mobile_app_" + slugify(name) if name else ""
+            if not service or not self.hass.services.has_service("notify", service):
+                continue  # not registered for push notifications
+            people = set(by_entry.get(entry.entry_id, ()))
+            if users.get(entry.data.get("user_id")):
+                people.add(users[entry.data["user_id"]])
+            phone = phones.setdefault(f"notify.{service}", {"id": f"notify.{service}", "name": name, "people": set()})
+            phone["people"] |= people
+        return sorted(({**p, "people": sorted(p["people"])} for p in phones.values()), key=lambda p: p["name"].lower())
+
+    def notify_targets(self, actor: Actor) -> list[dict[str, Any]]:
+        """Where a task reminder can go: phones for everyone, other notify services for administrators too."""
+        targets = [{**phone, "kind": "phone"} for phone in self.phones()]
+        if actor.user_id is None or actor.is_admin:
+            taken = {t["id"] for t in targets}
+            for name in sorted(self.hass.services.async_services().get("notify", {})):
+                # send_message needs a notify entity, which a reminder doesn't pick.
+                if name != "send_message" and f"notify.{name}" not in taken:
+                    targets.append({"id": f"notify.{name}", "name": name.replace("_", " "), "people": [], "kind": "service"})
+        return targets
+
+    def reminder_target_allowed(self, target: str, actor: Actor) -> bool:
+        return target == REMIND_ASSIGNED or any(t["id"] == target for t in self.notify_targets(actor))
+
+    def _reminder_services(self, task: Mapping[str, Any], plan: Mapping[str, Any]) -> list[str]:
+        target = task.get("remind_target")
+        if target != REMIND_ASSIGNED:
+            return [target] if target else []
+        people = set(task.get("assigned_to") or []) or set(self.household())
+        if plan.get("is_private"):
+            # A private plan's reminders only reach the people it is shared with.
+            allowed = {plan.get("owner_user_id"), *(plan.get("shared_with") or [])} - {None}
+            people = {p for p in people if self._person_user(p) in allowed}
+        return [phone["id"] for phone in self.phones() if people & set(phone["people"])]
+
+    async def _send_reminders(self) -> None:
+        for task in await self.planner.due_reminders():
+            # Marked first: a failing notify service must not repeat the reminder every minute.
+            await self.planner.mark_reminded(task["uid"], task["due_date"])
+            plan = await self.db.get_plan(task["plan_id"])
+            if plan is None:
+                continue
+            services = self._reminder_services(task, plan)
+            if not services:
+                _LOGGER.debug("No phone to send the reminder for task %s to", task["uid"])
+                continue
+            title, message = reminder_text(task, plan["name"], self.tz)
+            data = notification_data(task["uid"], f"/{PANEL_URL_PATH}?task={task['uid']}")
+            for service in services:
+                domain, _, name = service.partition(".")
+                try:
+                    await self.hass.services.async_call(domain, name, {"title": title, "message": message, "data": data}, blocking=False)
+                except Exception as err:  # noqa: BLE001 - one missing phone must not stop the other reminders
+                    _LOGGER.warning("Could not send the reminder for task %s through %s: %s", task["uid"], service, err)
+
+    @callback
+    def _on_notification_action(self, event: Event) -> None:
+        parsed = parse_action(event.data.get("action"))
+        if parsed is not None:
+            self._spawn(self._notification_action(*parsed, event.context.user_id), "taskdragon_reminder_action")
+
+    async def _notification_action(self, kind: str, uid: str, user_id: str | None) -> None:
+        """Done / Snooze tapped on a reminder: act as the user whose phone it was."""
+        actor = await self.actor_for_user_id(user_id)
+        task = await self.db.get_task(uid)
+        plan = await self.db.get_plan(task["plan_id"]) if task else None
+        if task is None or plan is None or not self.planner.can_access(plan, actor):
+            _LOGGER.debug("Ignoring a reminder button for task %s, which is gone or not shared with that user", uid)
+            return
+        try:
+            if kind == "done":
+                if task["status"] != STATUS_COMPLETED:
+                    await self.planner.set_completed(uid, True, actor)
+            else:
+                await self.planner.snooze_until(uid, dt_util.utcnow() + timedelta(minutes=SNOOZE_MINUTES), actor)
+                # Remind again once it wakes up.
+                await self.planner.mark_reminded(uid, None)
+        except PlannerError as err:
+            _LOGGER.info("Reminder button for task %s failed: %s", uid, err)
 
     def recipe_url(self, slug: str | None) -> str | None:
         return self.mealie.recipe_url(slug) if self.mealie and slug else None
@@ -558,6 +670,10 @@ class TaskDragonCoordinator:
             await self._check_leftovers()
         except Exception:  # noqa: BLE001 - a failing tick must not stop future ticks
             _LOGGER.exception("TaskDragon minute tick failed")
+        try:
+            await self._send_reminders()
+        except Exception:  # noqa: BLE001 - a failing reminder round must not stop the next one
+            _LOGGER.exception("TaskDragon reminders failed")
 
     async def _shift_tick(self, now: datetime) -> None:
         try:

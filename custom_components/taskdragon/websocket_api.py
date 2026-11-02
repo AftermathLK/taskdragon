@@ -149,6 +149,8 @@ TASK_FIELDS: dict[Any, Any] = {
     vol.Optional("sensor_mode"): vol.Any(None, _text(20)),
     vol.Optional("sensor_threshold"): vol.Any(None, vol.Coerce(float)),
     vol.Optional("blocked_by"): IDS,
+    vol.Optional("remind_target"): vol.Any(None, _text(140)),
+    vol.Optional("remind_time"): vol.Any(None, _text(12)),
 }
 TASK_SCHEMA = vol.Schema(
     {
@@ -256,6 +258,7 @@ async def ws_get_board(hass, connection, msg, coordinator, actor):
     board = await coordinator.planner.get_board(msg.get("plan_id"), actor)
     board["people"] = coordinator.people_for(actor)
     board["me"] = coordinator.person_for_user(actor.user_id)
+    board["notify_targets"] = coordinator.notify_targets(actor)
     # Status only: the Mealie URL and token never leave the server.
     board["mealie"] = {k: coordinator.mealie_status.get(k) for k in ("enabled", "ok", "last_sync", "error")}
     board["options"] = {

@@ -37,6 +37,7 @@ SECTION_SCHEMA = vol.Schema(
         vol.Optional("gift_for_person_id"): PERSON,
         vol.Optional("stealth_mode"): bool,
         vol.Optional("position"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100000)),
+        vol.Optional("parent_id"): OPT_ID,
     }
 )
 ITEM_SCHEMA = vol.Schema(

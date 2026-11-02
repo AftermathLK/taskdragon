@@ -447,7 +447,7 @@ async def test_sections_crud_and_cloning(hoard, planner) -> None:
     board = await hoard.board(plan["id"], ALEX)
     want = section(board, "Want to Buy")["id"]
     moved = await hoard.delete_section(halloween["id"], ALEX, move_to=want)
-    assert moved == {"moved": 1, "to": want}
+    assert moved == {"moved": 1, "to": want, "categories": 0}
     assert (await hoard.item_view(item["id"], ALEX))["section_id"] == want
 
 
@@ -525,3 +525,75 @@ async def test_gifts_for_people_without_an_account_are_still_secret(hoard) -> No
     assert item["secret"]
     kid_view = await hoard.board(plan["id"], KID)
     assert kid_view["items"][0]["secret"], "nobody's login to hide it from, but kiosks cover it and alerts leave it out"
+
+
+async def test_categories_under_an_occasion(hoard, planner) -> None:
+    plan = hoard.test_plan
+    board = await hoard.board(plan["id"], ALEX)
+    xmas = section(board, "Christmas")
+    ellie = await hoard.save_section({"plan_id": plan["id"], "name": "Ellie", "parent_id": xmas["id"], "budget": 150, "kind": "want", "event_date": "2027-01-01"}, ALEX)
+    sams = await hoard.save_section({"plan_id": plan["id"], "name": "Sam's list", "parent_id": xmas["id"], "gift_for_person_id": "person.sam"}, ALEX)
+    assert ellie["parent_id"] == xmas["id"] and ellie["kind"] == "holiday" and ellie["is_gift"], "a category takes its occasion's type"
+    assert ellie["event_date"] is None and ellie["days_left"] == xmas["days_left"], "and its countdown"
+    with pytest.raises(PlannerError):
+        await hoard.save_section({"plan_id": plan["id"], "name": "Deeper", "parent_id": ellie["id"]}, ALEX)
+    with pytest.raises(PlannerError):
+        await hoard.save_section({"id": xmas["id"], "parent_id": section(board, "Birthdays")["id"]}, ALEX)  # it has categories
+    with pytest.raises(PlannerError):
+        await hoard.save_section({"id": ellie["id"], "parent_id": ellie["id"]}, ALEX)
+    other = await planner.create_plan({"name": "Other wishlist", "archetype": "wishlist_hoard"})
+    with pytest.raises(PlannerError):
+        await hoard.save_section({"plan_id": other["id"], "name": "Elsewhere", "parent_id": xmas["id"]}, ALEX)
+
+    doll = await hoard.save_item({"plan_id": plan["id"], "title": "Doll house", "section_id": ellie["id"]}, ALEX)
+    await hoard.mark_purchased(doll["id"], ALEX, paid_price=120, purchase_date="2026-10-27", store="Toy shop", protection_days=0)
+    bike = await hoard.save_item({"plan_id": plan["id"], "title": "Bike", "section_id": sams["id"]}, ALEX)
+    assert doll["secret"] and bike["secret"], "everything in a gift occasion's category is a gift"
+
+    alex_view = await hoard.board(plan["id"], ALEX)
+    assert section(alex_view, "Christmas")["summary"]["spent"] == 120 and section(alex_view, "Christmas")["summary"]["total"] == 2
+    assert section(alex_view, "Ellie")["summary"]["spent"] == 120 and section(alex_view, "Ellie")["budget"] == 150
+    # Sam can't see the category made for Sam, or what's in it: it's announced under Christmas instead.
+    sam_view = await hoard.board(plan["id"], SAM)
+    assert "Sam's list" not in [s["name"] for s in sam_view["sections"]] and "Ellie" in [s["name"] for s in sam_view["sections"]]
+    assert [i["title"] for i in sam_view["items"]] == ["Doll house"]
+    assert {"section_id": xmas["id"], "buyer": "Alex", "count": 1} in sam_view["hidden"]
+    for call in (hoard.item_view(bike["id"], SAM), hoard.save_section({"id": sams["id"], "name": "Peek"}, SAM)):
+        with pytest.raises(PlannerError):
+            await call
+    # The occasion's secret hides its categories too.
+    birthdays = section(board, "Birthdays")
+    secret = await hoard.save_section({"id": birthdays["id"], "stealth_mode": True}, ALEX)
+    party = await hoard.save_section({"plan_id": plan["id"], "name": "Party bags", "parent_id": secret["id"]}, ALEX)
+    assert "Party bags" not in [s["name"] for s in (await hoard.board(plan["id"], SAM))["sections"]]
+    with pytest.raises(PlannerError):
+        await hoard.save_item({"plan_id": plan["id"], "title": "Balloons", "section_id": party["id"]}, SAM)
+
+    # Changing the occasion's type carries the categories along.
+    await hoard.save_section({"id": xmas["id"], "kind": "occasion"}, ALEX)
+    assert section(await hoard.board(plan["id"], ALEX), "Ellie")["kind"] == "occasion"
+
+    # Deleting a category moves its items up to the occasion; deleting the occasion takes the rest along.
+    moved = await hoard.delete_section(ellie["id"], ALEX)
+    assert moved == {"moved": 1, "to": xmas["id"], "categories": 0}
+    assert (await hoard.item_view(doll["id"], ALEX))["section_id"] == xmas["id"]
+    gone = await hoard.delete_section(xmas["id"], ALEX)
+    assert gone["categories"] == 1 and gone["moved"] == 2 and gone["to"] is None
+    after = await hoard.board(plan["id"], ALEX)
+    assert "Sam's list" not in [s["name"] for s in after["sections"]] and {i["section_id"] for i in after["items"]} == {None}
+
+
+async def test_categories_are_cloned_and_listed_for_scans(hoard, planner) -> None:
+    plan = hoard.test_plan
+    board = await hoard.board(plan["id"], ALEX)
+    xmas = section(board, "Christmas")
+    await hoard.save_section({"plan_id": plan["id"], "name": "Ellie", "parent_id": xmas["id"]}, ALEX)
+    await hoard.save_section({"plan_id": plan["id"], "name": "Sam", "parent_id": xmas["id"], "gift_for_person_id": "person.sam"}, ALEX)
+    copy = await planner.clone_plan(plan["id"], "Wishlist 2027", actor=ALEX)
+    copied = await hoard.board(copy["id"], ALEX)
+    copied_xmas = section(copied, "Christmas")
+    assert section(copied, "Ellie")["parent_id"] == copied_xmas["id"] and "Sam" not in [s["name"] for s in copied["sections"]]
+    scan = await hoard.scan_price_check("012345678905", ALEX, plan_id=plan["id"])
+    names = [s["name"] for s in scan["sections"]]
+    assert names.index("Christmas › Ellie") == names.index("Christmas") + 1
+    assert "Christmas › Sam" not in [s["name"] for s in (await hoard.scan_price_check("012345678905", SAM, plan_id=plan["id"]))["sections"]]

@@ -121,7 +121,7 @@ async def test_snapshot_holds_everything_with_checksums_and_bridge(planner, tmp_
         assert archive.read("documents/" + data["sha"]) == PDF
     assert manifest["schema_version"] == "1.0.0-portable" and manifest["source_platform"] == "home_assistant_custom_component"
     assert manifest["documents"][0]["filenames"] == ["manual.pdf"] and manifest["missing_documents"] == ["f" * 64]
-    assert dump["format"] == "taskdragon-database-dump" and dump["db_schema_version"] == 5
+    assert dump["format"] == "taskdragon-database-dump" and dump["db_schema_version"] == 6
     expected = {"plans", "tasks", "task_dependencies", "completion_logs", "pantry_items", "snooze_rules", "trips", "sections", "barcode_mappings", "maint_objects", "maint_tasks", "maint_parts", "maint_documents", "maint_events", "salt_observations", "meta", "user_prefs"}
     assert expected <= set(dump["tables"]) and manifest["counts"]["barcode_mappings"] == 1
     assert "settings" in dump["tables"]["plans"]["json_columns"]
